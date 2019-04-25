@@ -2,6 +2,11 @@ import { BaseEntity, MappableEntities } from '../shared';
 import { Modulo } from '../modulo';
 import { Funcionalidade } from '../funcionalidade';
 
+export enum TipoSistema {
+  'NOVO' = 'NOVO',
+  'LEGADO' = 'LEGADO'
+}
+
 export class Sistema implements BaseEntity {
 
   private mappableModulos: MappableEntities<Modulo>;
@@ -10,6 +15,7 @@ export class Sistema implements BaseEntity {
     public id?: number,
     public sigla?: string,
     public nome?: string,
+    public tipoSistema?: TipoSistema,
     public numeroOcorrencia?: string,
     public organizacao?: BaseEntity,
     public modulos?: Modulo[],
@@ -23,16 +29,19 @@ export class Sistema implements BaseEntity {
   }
 
   static fromJSON(json: any): Sistema {
-    const modulos = json.modulos.map(m => Modulo.fromJSON(m));
+    let modulos;
+    if (json && json.modulos) {
+      modulos = json.modulos.map(m => Modulo.fromJSON(m));
+    }
     const newSistema = new Sistema(json.id, json.sigla,
-      json.nome, json.numeroOcorrencia, json.organizacao,
+      json.nome, json.tipoSistema, json.numeroOcorrencia, json.organizacao,
       modulos);
     return newSistema;
   }
 
   static toNonCircularJson(s: Sistema): Sistema {
-    const nonCircularModulos = s.modulos.map(m => Modulo.toNonCircularJson(m));
-    return new Sistema(s.id, s.sigla, s.nome, s.numeroOcorrencia,
+    const nonCircularModulos = s.modulos ? s.modulos.map(m => Modulo.toNonCircularJson(m)) : [];
+    return new Sistema(s.id, s.sigla, s.nome, s.tipoSistema, s.numeroOcorrencia,
       s.organizacao, nonCircularModulos);
   }
 
@@ -51,7 +60,9 @@ export class Sistema implements BaseEntity {
 
   private getAllFuncionalidadesAsArrayOfArrays(): Array<Array<Funcionalidade>> {
     const allFuncs = [];
-    this.modulos.forEach(m => allFuncs.push(this.retrieveFuncionalidadesFromModulo(m)));
+    if (this.modulos) {
+      this.modulos.forEach(m => allFuncs.push(this.retrieveFuncionalidadesFromModulo(m)));
+    }
     return allFuncs;
   }
 

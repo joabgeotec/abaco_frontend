@@ -42,6 +42,26 @@ export class UserService {
     });
   }
 
+  /**
+   * Função que retorna dados do usuário logado
+   */
+  findCurrentUser(): Observable<User> {
+    return this.http.get(`${this.resourceUrl}/logged`).map((res: Response) => {
+      const jsonResponse = res.json();
+      return this.convertItemFromServer(jsonResponse);
+    });
+  }
+
+  /**
+   * Função que retorna dados do usuário logado somente com as organizações ativas
+   */
+  findCurrentUserActiveOrgs(): Observable<User> {
+    return this.http.get(`${this.resourceUrl}/activeorgs`).map((res: Response) => {
+      const jsonResponse = res.json();
+      return this.convertItemFromServer(jsonResponse);
+    });
+  }
+
   query(req?: any): Observable<ResponseWrapper> {
     const options = createRequestOption(req);
     return this.http.get(this.resourceUrl, options)
@@ -49,7 +69,7 @@ export class UserService {
   }
 
   delete(user: User): Observable<Response> {
-    return this.http.delete(`${this.resourceUrl}/${user.login}`);
+    return this.http.delete(`${this.resourceUrl}/${user.id}`);
   }
 
   authorities(): Observable<Authority[]> {

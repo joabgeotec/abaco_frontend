@@ -1,62 +1,78 @@
-<div class="ui-g ui-fluid" style="justify-content: center;">
-  <div class="ui-g-12">
+<div class="ui-g ui-fluid login-template" *ngIf="!authenticated">
+  <div class="ui-g-12 container-login">
 
-    <div 
-      class="card card-w-title login-panel" 
-      style="margin: 0px auto 0 auto; min-height: 400px;"
-      *ngIf="!authenticated">
-      
-      <form
-        name="loginForm" 
-        role="form" 
+    <div class="card card-w-title login-panel">
+
+      <form novalidate #loginForm="ngForm"
+        name="loginForm"
+        role="form"
         (ngSubmit)="login()">
 
-        <h1>Login</h1>
+        <span class="logo">
+          <!--<i class="fa ui-icon-landscape">logo</i>-->
+        </span>
 
-        <div class="ui-g" style="justify-content: center;">
+        <h1 class="title p-b-34 p-t-27" translate="Login.LOGIN">LOGIN</h1>
 
-          <div class="ui-g-12 ui-md-12 ui-sm-12" style="margin-bottom: 25px;">
-            <span class="md-inputfield">
-              <input 
+        <div class="ui-g">
+
+          <div class="ui-g-12 ui-md-12 ui-sm-12 input">
+            <input
                 required
-                type="text" 
-                name="username" 
-                [(ngModel)]="username" 
+                type="text"
+                name="username"
+                [(ngModel)]="username"
+                [placeholder]="this.getLabel('Login.Usuario*')"
                 pInputText />
-              <label>Usuário *</label>
-            </span>
-          </div>
+                <span class="username" data-placeholder=""></span>
 
-          <div class="ui-g-12 ui-md-12 ui-sm-12" style="margin-bottom: 25px;">
-            <span class="md-inputfield">
-              <input
+          </div>
+          <div *ngIf="(loginForm.controls['username']
+                                        && !loginForm.controls['username'].valid
+                                        && (loginForm.controls['username'].touched
+                                        || loginForm.submitted))" class="ui-message ui-messages-error"  translate="Global.Mensagens.CampoObrigatorio">
+                                    Campo obrigatório.
+                </div>
+          <div class="ui-g-12 ui-md-12 ui-sm-12 input">
+            <input
                 required
-                pPassword 
-                type="password" 
-                name="password" 
-                [(ngModel)]="password" 
+                pPassword
+                type="password"
+                name="password"
+                [placeholder]="this.getLabel('Login.Senha*')"
+                [(ngModel)]="password"
                 [feedback]="false" />
-              <label>Senha *</label>
-            </span>
-          </div>
+                <span class="password" data-placeholder=""></span>
 
+          </div>
+          <div *ngIf="(loginForm.controls['password']
+                                        && !loginForm.controls['password'].valid
+                                        && (loginForm.controls['password'].touched
+                                        || loginForm.submitted))" class="ui-message ui-messages-error"  translate="Global.Mensagens.CampoObrigatorio">
+                                    Campo obrigatório.
+                </div>
         </div>
 
-        <div class="ui-g-12" style="justify-content: center">
-            <button pButton type="submit" label="Login"></button>
+        <div class="ui-g-12 login-btn">
+            <button pButton type="submit">
+              <span>Login</span>
+            </button>
         </div>
       </form>
     </div>
+  </div>
+</div>
+
+<div class="ui-g ui-fluid" *ngIf="authenticated">
+    <div class="ui-g-12">
 
     <!-- Inicio Após a autenticação exibir o campo abaixo-->
-    <div class="card login-panel" *ngIf="authenticated"
-      style="margin: 0px auto 0 auto; min-height: 50px;">
+    <div class="card login-panel" style="margin: 0px auto 0 auto; min-height: 50px;">
       <span style="font-size: 20px;"> {{ authenticatedUserFullName() }} </span>
 
-      <p style="font-size: 20px;">Bem-vindo ao Ábaco</p>
+      <p style="font-size: 20px;">{{this.getLabel('Login.BemVindo')}}</p>
       <i class="material-icons" style="font-size: 200px; color: #618849;">blur_linear</i>
     </div>
     <!-- Fim Após a autenticação exibir o campo abaixo-->
-
   </div>
 </div>

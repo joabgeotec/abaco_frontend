@@ -1,3 +1,4 @@
+import { TranslateService } from '@ngx-translate/core';
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Response } from '@angular/http';
@@ -30,7 +31,16 @@ export class TipoEquipeFormComponent implements OnInit, OnDestroy {
     private tipoEquipeService: TipoEquipeService,
     private pageNotificationService: PageNotificationService,
     private organizacaoService: OrganizacaoService,
+    private translate: TranslateService
   ) { }
+
+  getLabel(label) {
+    let str: any;
+    this.translate.get(label).subscribe((res: string) => {
+      str = res;
+    }).unsubscribe();
+    return str;
+  }
 
   ngOnInit() {
     this.isSaving = false;
@@ -45,64 +55,48 @@ export class TipoEquipeFormComponent implements OnInit, OnDestroy {
     });
   }
 
-  save() {
+  save(form) {
+
+    if (!form.valid) {
+      this.pageNotificationService.addErrorMsg(this.getLabel('Global.Mensagens.FavorPreencherCamposObrigatorios'));
+      return;
+    }
+
     this.isSaving = true;
     let teamTypesRegistered: Array<TipoEquipe>;
     this.tipoEquipeService.query().subscribe(response => {
-        teamTypesRegistered = response.json;
-        if (this.tipoEquipe.id !== undefined) {
-          if (this.checkRequiredFields() && this.checkFieldsMaxLength() && !this.checkDuplicity(teamTypesRegistered)) {
-            this.subscribeToSaveResponse(this.tipoEquipeService.update(this.tipoEquipe));
-          }
-        } else {
-          if (this.checkRequiredFields() && this.checkFieldsMaxLength() && !this.checkDuplicity(teamTypesRegistered)) {
-            this.subscribeToSaveResponse(this.tipoEquipeService.create(this.tipoEquipe));
-          }
+      teamTypesRegistered = response.json;
+      if (this.tipoEquipe.id !== undefined) {
+        if (this.checkFieldsMaxLength() && !this.checkDuplicity(teamTypesRegistered)) {
+          this.subscribeToSaveResponse(this.tipoEquipeService.update(this.tipoEquipe));
         }
+      } else {
+        if (this.checkFieldsMaxLength() && !this.checkDuplicity(teamTypesRegistered)) {
+          this.subscribeToSaveResponse(this.tipoEquipeService.create(this.tipoEquipe));
+        }
+      }
     });
   }
 
   private checkDuplicity(teamTypes: Array<TipoEquipe>) {
     let isAlreadyRegistered = false;
 
-    teamTypes.forEach(each => {
-      if (this.tipoEquipe.nome === each.nome && this.tipoEquipe.id !== each.id) {
-        isAlreadyRegistered = true;
-        this.pageNotificationService.addErrorMsg('Registro já cadastrado!');
-      }
-    });
+    if (teamTypes) {
+      teamTypes.forEach(each => {
+        if (this.tipoEquipe.nome === each.nome && this.tipoEquipe.id !== each.id) {
+          isAlreadyRegistered = true;
+          this.pageNotificationService.addErrorMsg(this.getLabel('Cadastros.TipoEquipe.Mensagens.msgExisteTipoEquipeRegistradoComEsteNome'));
+        }
+      });
+    }
 
     return isAlreadyRegistered;
   }
 
   private resetMarkFields() {
     document.getElementById('nome_tipo_equipe').setAttribute('style', 'border-color: #bdbdbd');
+    document.getElementById('org_tipo_equipe').setAttribute('style', 'border-color: #bdbdbd');
   }
-
-  private checkRequiredFields(): boolean {
-    this.resetMarkFields();
-    return this.validarObjeto(this.tipoEquipe.nome);
-  }
-
-  private validarObjeto(text: string): boolean {
-    if (text !== undefined && text !== null && text.trim() !== '') {
-      return true;
-    } else {
-      this.pageNotificationService.addErrorMsg('Favor preencher os campos obrigatórios!');
-      document.getElementById('nome_tipo_equipe').setAttribute('style', 'border-color: red');
-      return false;
-    }
-  }
-
-  // private validarOrganizacao(): boolean {
-  //   if (this.organizacoes !== undefined && this.organizacoes !== null) {
-  //     return true;
-  //   } else {
-  //     this.pageNotificationService.addErrorMsg('Favor preencher os campos obrigatórios!');
-  //     document.getElementById('org').setAttribute('style', 'border-color: red');
-  //     return false;
-  //   }
-  // }
 
   private checkFieldsMaxLength() {
     let isValid = false;
@@ -110,7 +104,7 @@ export class TipoEquipeFormComponent implements OnInit, OnDestroy {
     if (this.tipoEquipe.nome.length < 255) {
       isValid = true;
     } else {
-      this.pageNotificationService.addErrorMsg('O campo nome excede o número de caracteres permitidos.');
+      this.pageNotificationService.addErrorMsg(this.getLabel('Cadastros.TipoEquipe.Mensagens.msgCampoNomeExcedeNumeroCaracteresPermitidos'));
     }
 
     return isValid;
@@ -120,7 +114,7 @@ export class TipoEquipeFormComponent implements OnInit, OnDestroy {
     result.subscribe((res: TipoEquipe) => {
       this.isSaving = false;
       this.router.navigate(['/admin/tipoEquipe']);
-      (this.tipoEquipe.id === null) ? (this.pageNotificationService.addCreateMsg()) : (this.pageNotificationService.addUpdateMsg());
+      (this.tipoEquipe.id == null) ? (this.pageNotificationService.addCreateMsg()) : (this.pageNotificationService.addUpdateMsg());
 
     }, (error: Response) => {
       this.isSaving = false;
@@ -129,7 +123,7 @@ export class TipoEquipeFormComponent implements OnInit, OnDestroy {
           let invalidFieldNamesString = '';
           const fieldErrors = JSON.parse(error['_body']).fieldErrors;
           invalidFieldNamesString = this.pageNotificationService.getInvalidFields(fieldErrors);
-          this.pageNotificationService.addErrorMsg('Campos inválidos: ' + invalidFieldNamesString);
+          this.pageNotificationService.addErrorMsg(this.getLabel('Cadastros.TipoEquipe.Mensagens.msgCamposInvalidos') + invalidFieldNamesString);
         }
       }
     });
@@ -138,4 +132,17 @@ export class TipoEquipeFormComponent implements OnInit, OnDestroy {
   ngOnDestroy() {
     this.routeSub.unsubscribe();
   }
+
+  public informarNome(): string {
+    if (!this.tipoEquipe.nome) {
+      return this.getLabel('Cadastros.TipoEquipe.Mensagens.msgCampoObrigatorio');
+    }
+  }
+
+  public informarOrganizacao(): string {
+    if (!this.tipoEquipe.organizacoes) {
+      return this.getLabel('Cadastros.TipoEquipe.Mensagens.msgCampoObrigatorio');
+    }
+  }
+
 }

@@ -2,18 +2,23 @@
   <p-dataTable [value]="value"
     [immutable]="false"
     [(selection)]="selectedRow"
-    [emptyMessage]="'Nenhum registro encontrado.'"
+    (onRowSelect)="onRowSelect($event)"
+    [emptyMessage]="this.getLabel('Global.Mensagens.emptyMessage')"
     selectionMode="single"
     [responsive]="responsive"
     [scrollable]="scrollable"
-    [scrollWidth]="scrollWidth">
+    [scrollWidth]="scrollWidth"
+    [rows]="rows"
+    [paginator]="paginator"
+    [sortField]="sortF" 
+    (onSort)="changeSort($event)">
   </p-dataTable>
 </div>
   
 <div class="ui-g-1 ui-g-nopad">
   <basis-datatable-button
     *ngIf="!disableEdit"
-    [tooltip]="selectedRow != null ? 'Editar' : 'Escolha um registro para editar.'"
+    [tooltip]="selectedRow != null ? this.getLabel('Global.Mensagens.Editar') : this.getLabel('Global.Mensagens.EscolhaUmRegistroParaEditar')"
     [disabled]="selectedRow == null"
     (click)="onClick(editEventName, $event)"
     class="ui-button-success"
@@ -22,10 +27,29 @@
 
   <basis-datatable-button 
     *ngIf="!disableDelete"
-    [tooltip]="selectedRow != null ? 'Excluir' : 'Escolha um registro para excluir.'" 
+    [tooltip]="selectedRow != null ? this.getLabel('Global.Mensagens.Excluir') : this.getLabel('Global.Mensagens.EscolhaUmRegistroParaExcluir')" 
     [disabled]="selectedRow == null"
     (click)="onClick(deleteEventName, $event)" 
     class="ui-button-danger"
     icon="delete">
   </basis-datatable-button>
+
+  <basis-datatable-button
+    *ngIf="!disableClone"
+    [tooltip]="selectedRow != null ? this.getLabel('Global.Mensagens.Clonar') : this.getLabel('Global.Mensagens.EscolhaUmRegistroParaClonar')" 
+    [disabled]="selectedRow == null"
+    (click)="onClick(cloneEventName, $event)"
+    class="ui-button-dark"
+    icon="content-copy">
+    </basis-datatable-button>
+
+    <basis-datatable-button
+    *ngIf="!disableCrud && showCrud"
+    [tooltip]="selectedRow != null ? this.getLabel('Global.Mensagens.CriarCrud') : this.getLabel('Global.Mensagens.EscolhaUmRegistroParaCriarCrud')" 
+    [disabled]="selectedRow == null"
+    (click)="onClick(crudEventName, $event)"
+    class="ui-button-success"
+    icon="input">
+    </basis-datatable-button>
+
 </div>

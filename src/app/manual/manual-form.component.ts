@@ -1,8 +1,8 @@
+import { TranslateService } from '@ngx-translate/core';
 import { Component, OnInit, OnDestroy, ViewChild } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Response } from '@angular/http';
 import { Observable, Subscription } from 'rxjs/Rx';
-import { SelectItem } from 'primeng/primeng';
 
 import { Manual } from './manual.model';
 import { ManualService } from './manual.service';
@@ -17,450 +17,531 @@ import { FatorAjuste, TipoFatorAjuste } from '../fator-ajuste/fator-ajuste.model
 import { PageNotificationService } from '../shared/page-notification.service';
 import { UploadService } from '../upload/upload.service';
 import { FileUpload } from 'primeng/primeng';
-import { TranslateService } from '@ngx-translate/core';
 
 @Component({
-  selector: 'jhi-manual-form',
-  templateUrl: './manual-form.component.html',
+    selector: 'jhi-manual-form',
+    templateUrl: './manual-form.component.html',
 })
 export class ManualFormComponent implements OnInit, OnDestroy {
-  manual: Manual;
-  isSaving: boolean;
-  loading: boolean;
-  private routeSub: Subscription;
-  arquivoManual: File;
-  esforcoFases: Array<EsforcoFase>;
-  showDialogPhaseEffort = false;
-  showDialogEditPhaseEffort = false;
-  showDialogCreateAdjustFactor = false;
-  showDialogEditAdjustFactor = false;
-  tipoFases: Array<TipoFase> = [];
-  percentual: number;
-  newPhaseEffort: EsforcoFase = new EsforcoFase();
-  editedPhaseEffort: EsforcoFase = new EsforcoFase();
-  newAdjustFactor: FatorAjuste = new FatorAjuste();
-  editedAdjustFactor: FatorAjuste = new FatorAjuste();
+    manual: Manual;
+    isSaving;
+    isEdit; newUpload; validaEsforco; validaTipoFase; validaNomeDeflator; validaTipoDeflator; validaDeflator: boolean;
+    private routeSub: Subscription;
+    arquivoManual: File;
+    esforcoFases: Array<EsforcoFase>;
+    showDialogPhaseEffort = false;
+    showDialogEditPhaseEffort = false;
+    showDialogCreateAdjustFactor = false;
+    showDialogEditAdjustFactor = false;
+    tipoFases: Array<TipoFase> = [];
+    percentual: number;
+    newPhaseEffort: EsforcoFase = new EsforcoFase();
+    editedPhaseEffort: EsforcoFase = new EsforcoFase();
+    newAdjustFactor: FatorAjuste = new FatorAjuste();
+    editedAdjustFactor: FatorAjuste = new FatorAjuste();
 
-  adjustTypes: Array<any> = [
-    { label: 'Percentual', value: 'PERCENTUAL', },
-    { label: 'Unitário', value: 'UNITARIO', },
-  ];
+    adjustTypes: Array<any> = [
+        { label: 'Percentual', value: 'PERCENTUAL' },
+        { label: 'Unitário', value: 'UNITARIO' }
+    ];
 
-  invalidFields: Array<string> = [];
+    invalidFields: Array<string> = [];
 
-  @ViewChild('fileInput') fileInput: FileUpload;
+    @ViewChild('fileInput') fileInput: FileUpload;
 
-  constructor(
-    private route: ActivatedRoute,
-    private router: Router,
-    private manualService: ManualService,
-    private esforcoFaseService: EsforcoFaseService,
-    private tipoFaseService: TipoFaseService,
-    private confirmationService: ConfirmationService,
-    private pageNotificationService: PageNotificationService,
-    private uploadService: UploadService,
-    private translate: TranslateService
-  ) {
-    translate.setDefaultLang('pt');
-    translate.use(sessionStorage.getItem('language'));
-  }
-
-  ngOnInit() {
-    this.isSaving = false;
-    this.routeSub = this.route.params.subscribe(params => {
-      this.manual = new Manual();
-      if (params['id']) {
-        this.manualService.find(params['id']).subscribe(manual => {
-          this.manual = manual;
-          this.getFile();
-        });
-      }
-    });
-
-    this.tipoFaseService.query().subscribe((response: ResponseWrapper) => {
-      this.tipoFases = response.json;
-    });
-  }
-
-  save() {
-    this.isSaving = true;
-
-    if (this.manual.id !== undefined) {
-      this.editar();
-    } else {
-      this.novo();
+    /**
+     *
+     */
+    constructor(
+        private route: ActivatedRoute,
+        private router: Router,
+        private manualService: ManualService,
+        private esforcoFaseService: EsforcoFaseService,
+        private tipoFaseService: TipoFaseService,
+        private confirmationService: ConfirmationService,
+        private pageNotificationService: PageNotificationService,
+        private uploadService: UploadService,
+        private translate: TranslateService
+    ) {
     }
-  }
 
-  private editar() {
-    this.manualService.find(this.manual.id).subscribe(response => {
-      if (this.checkRequiredFields()) {
-        if (this.arquivoManual !== undefined) {
-          // tslint:disable-next-line:no-shadowed-variable
-          this.uploadService.uploadFile(this.arquivoManual).subscribe(response => {
-            this.manual.arquivoManualId = JSON.parse(response['_body']).id;
-            this.subscribeToSaveResponse(this.manualService.update(this.manual));
-          });
+    getLabel(label) {
+        let str: any;
+        this.translate.get(label).subscribe((res: string) => {
+            str = res;
+        }).unsubscribe();
+        return str;
+    }
+
+    ngOnInit() {
+        this.traduzirClassificacoes();
+        this.newUpload = false;
+        this.isSaving = false;
+        this.routeSub = this.route.params.subscribe(params => {
+            this.manual = new Manual();
+            this.manual.fatoresAjuste = [];
+            this.manual.esforcoFases = [];
+            if (params['id']) {
+                this.manualService.find(params['id']).subscribe(manual => {
+                    this.manual = manual;
+                    this.isEdit = true;
+                    if (this.manual.arquivoManualId) {
+                        this.getFile();
+                    }
+                });
+            }
+        });
+
+        this.tipoFaseService.query().subscribe((response: ResponseWrapper) => {
+            this.tipoFases = response.json;
+        });
+        this.manual.versaoCPM = 431;
+    }
+
+    /**
+     *
+     */
+    save(form: any) {
+        if (!this.checkRequiredFields()) {
+            this.pageNotificationService.addErrorMsg(this.getLabel('Global.Mensagens.FavorPreencherCamposObrigatorios'));
+            return;
+        }
+
+        this.isSaving = true;
+        this.manualService.query().subscribe(response => {
+            const todosManuais = response;
+
+            if (!this.checkIfManualAlreadyExists(todosManuais.json)) {
+                if (this.manual.id !== undefined) {
+                    this.editar();
+                } else {
+                    this.novo();
+                }
+            }
+        });
+    }
+
+    /*
+    *   Metodo responsavel por traduzir as adjustTypes
+    */
+    traduzirClassificacoes() {
+        this.translate.stream(['Cadastros.Manual.Percentual', 'Cadastros.Manual.Unitario']).subscribe((traducao) => {
+            this.adjustTypes = [
+                { label: traducao['Cadastros.Manual.Percentual'], value: 'PERCENTUAL' },
+                { label: traducao['Cadastros.Manual.Unitario'], value: 'UNITARIO' },
+            ];
+        })
+    }
+
+    private checkIfManualAlreadyExists(registeredPhases: Array<TipoFase>): boolean {
+        let isAlreadyRegistered = false;
+        if (registeredPhases) {
+            registeredPhases.forEach(each => {
+                if (each.nome === this.manual.nome && each.id !== this.manual.id) {
+                    isAlreadyRegistered = true;
+                    this.pageNotificationService.addErrorMsg(this.getLabel('Cadastros.Manual.msgJaExisteUmManualRegistradoComEsteNome'));
+                }
+            });
+        }
+        return isAlreadyRegistered;
+    }
+
+    private editar() {
+        this.manualService.find(this.manual.id).subscribe(() => {
+            const oldId = this.manual.arquivoManualId;
+            if (this.checkRequiredFields()) {
+                if (this.newUpload) {
+                    this.uploadService.uploadFile(this.arquivoManual).subscribe(response => {
+                        this.manual.arquivoManualId = response.id;
+                        this.isEdit = true;
+                        this.uploadService.deleteFile(oldId);
+                        this.subscribeToSaveResponse(this.manualService.update(this.manual));
+                    });
+                } else {
+                    this.isEdit = true;
+                    this.subscribeToSaveResponse(this.manualService.update(this.manual));
+                }
+            } else {
+                this.privateExibirMensagemCamposInvalidos(1);
+            }
+        });
+    }
+
+    private novo() {
+
+        if (this.arquivoManual) {
+            if (this.checkRequiredFields()) {
+                this.uploadService.uploadFile(this.arquivoManual).subscribe(response => {
+                    this.manual.arquivoManualId = response.id;
+                    this.subscribeToSaveResponse(this.manualService.create(this.manual));
+                });
+            } else {
+                this.privateExibirMensagemCamposInvalidos(1);
+            }
+        } else if (this.checkRequiredFields()) {
+            this.subscribeToSaveResponse(this.manualService.create(this.manual));
         } else {
-          this.subscribeToSaveResponse(this.manualService.update(this.manual));
+            this.privateExibirMensagemCamposInvalidos(1);
         }
-      } else {
-        this.privateExibirMensagemCamposInvalidos(1);
-      }
-    });
-  }
-
-  private novo() {
-    if (this.arquivoManual !== undefined) {
-      if (this.checkRequiredFields()) {
-        this.definirValorpadrao();
-        this.uploadService.uploadFile(this.arquivoManual).subscribe(response => {
-        this.manual.arquivoManualId = JSON.parse(response['_body']).id;
-        this.subscribeToSaveResponse(this.manualService.create(this.manual));
-        });
-      } else {
-        this.privateExibirMensagemCamposInvalidos(1);
-      }
-    } else {
-      this.privateExibirMensagemCamposInvalidos(2);
     }
-  }
 
-  private checkRequiredFields(): boolean {
-      let isFieldsValid = false;
-
-      if (!this.manual.valorVariacaoEstimada || this.manual.valorVariacaoEstimada === undefined) {
-        this.invalidFields.push('Valor Variação Estimada');
-      }
-      if (!this.manual.valorVariacaoIndicativa || this.manual.valorVariacaoIndicativa === undefined) {
-        this.invalidFields.push('Valor Variação Indicativa');
-      }
-      if (!this.manual.nome || this.manual.nome === undefined) {
-        this.invalidFields.push('Nome');
-      }
-      if (!this.manual.parametroInclusao || this.manual.parametroInclusao === undefined) {
-        this.invalidFields.push('Inclusão');
-      }
-      if (!this.manual.parametroAlteracao || this.manual.parametroAlteracao === undefined) {
-        this.invalidFields.push('Alteração');
-      }
-      if (!this.manual.parametroExclusao || this.manual.parametroExclusao === undefined) {
-        this.invalidFields.push('Exclusão');
-      }
-      if (!this.manual.parametroConversao || this.manual.parametroConversao === undefined) {
-        this.invalidFields.push('Conversão');
-      }
-
-      isFieldsValid = (this.invalidFields.length === 0);
-
-      return isFieldsValid;
-  }
-
-  privateExibirMensagemCamposInvalidos(codErro: number) {
-    switch (codErro) {
-      case 1:
-        this.pageNotificationService.addErrorMsg('Campos inválidos: ' + this.getInvalidFieldsString());
+    private checkRequiredFields(): boolean {
         this.invalidFields = [];
-        return;
-      case 2:
-        this.pageNotificationService.addErrorMsg('Campo Arquivo Manual está inválido!');
-        return;
+        let isFieldsValid = false;
 
-    }
-  }
-
-  private getInvalidFieldsString(): string {
-    let invalidFieldsString = '';
-
-    this.invalidFields.forEach(invalidField => {
-      if (invalidField === this.invalidFields[this.invalidFields.length - 1]) {
-        invalidFieldsString = invalidFieldsString + invalidField;
-      } else {
-        invalidFieldsString = invalidFieldsString + invalidField + ', ';
-      }
-    });
-
-    return invalidFieldsString;
-  }
-
-  private definirValorpadrao() {
-    this.manual.versaoCPM = 1;
-  }
-
-  private subscribeToSaveResponse(result: Observable<Manual>) {
-    result.subscribe((res: Manual) => {
-      this.isSaving = false;
-      this.router.navigate(['/manual']);
-      this.pageNotificationService.addCreateMsg();
-    }, (error: Response) => {
-      alert(error);
-      this.isSaving = false;
-      switch (error.status) {
-        case 400: {
-          let invalidFieldNamesString = '';
-          const fieldErrors = JSON.parse(error['_body']).fieldErrors;
-          invalidFieldNamesString = this.pageNotificationService.getInvalidFields(fieldErrors);
-          this.pageNotificationService.addErrorMsg('Campos inválidos: ' + invalidFieldNamesString);
+        if (!this.manual.valorVariacaoEstimada || this.manual.valorVariacaoEstimada === undefined) {
+            this.invalidFields.push(this.getLabel('Cadastros.Manual.ValorVariacaoEstimada'));
         }
-      }
-    });
-  }
+        if (!this.manual.valorVariacaoIndicativa || this.manual.valorVariacaoIndicativa === undefined) {
+            this.invalidFields.push(this.getLabel('Cadastros.Manual.ValorVariacaoIndicativa'));
+        }
+        if (!this.manual.nome || this.manual.nome === undefined) {
+            this.invalidFields.push(this.getLabel('Cadastros.Manual.Nome'));
+        }
+        if (!this.manual.parametroInclusao || this.manual.parametroInclusao === undefined) {
+            this.invalidFields.push(this.getLabel('Cadastros.Manual.Inclusao'));
+        }
+        if (!this.manual.parametroAlteracao || this.manual.parametroAlteracao === undefined) {
+            this.invalidFields.push(this.getLabel('Cadastros.Manual.Alteracao'));
+        }
+        if (!this.manual.parametroExclusao || this.manual.parametroExclusao === undefined) {
+            this.invalidFields.push(this.getLabel('Cadastros.Manual.Exclusao'));
+        }
+        if (!this.manual.parametroConversao || this.manual.parametroConversao === undefined) {
+            this.invalidFields.push(this.getLabel('Cadastros.Manual.Conversao'));
+        }
 
-  ngOnDestroy() {
-    this.routeSub.unsubscribe();
-  }
+        if (this.manual.esforcoFases.length === 0 || this.manual.esforcoFases === undefined) {
+            document.getElementById('tabela-tipo-fase').setAttribute('style', 'border: 1px dotted red;');
+            this.invalidFields.push(this.getLabel('Cadastros.Manual.EsforcoFases'));
+        }
 
-  uploadFile(event) {
-    this.arquivoManual = event.files[0];
-  }
+        if (this.manual.fatoresAjuste.length === 0 || this.manual.fatoresAjuste === undefined) {
+            document.getElementById('tabela-deflator').setAttribute('style', 'border: 1px dotted red;');
+            this.invalidFields.push(this.getLabel('Cadastros.Manual.Deflator'));
+        }
 
-  datatableClick(event: DatatableClickEvent) {
-    if (!event.selection) {
-      return;
+        isFieldsValid = (this.invalidFields.length === 0);
+
+        return isFieldsValid;
     }
-    console.log(event.selection);
-    switch (event.button) {
-      case 'edit':
-        this.editedPhaseEffort = event.selection.clone();
-        this.openDialogEditPhaseEffort();
-        break;
-      case 'delete':
-        console.log(event.selection);
-        this.editedPhaseEffort = event.selection.clone();
-        this.confirmDeletePhaseEffort();
+
+    privateExibirMensagemCamposInvalidos(codErro: number) {
+        switch (codErro) {
+            case 1:
+                this.pageNotificationService.addErrorMsg(this.getLabel('Cadastros.Manual.msgCamposInvalidos') + this.getInvalidFieldsString());
+                this.invalidFields = [];
+                return;
+            case 2:
+                this.pageNotificationService.addErrorMsg(this.getLabel('Cadastros.Manual.msgCampoArquivoManualEstaInvalido'));
+                return;
+        }
     }
-  }
 
-  adjustFactorDatatableClick(event: DatatableClickEvent) {
-    if (!event.selection) {
-      return;
+    private getInvalidFieldsString(): string {
+        let invalidFieldsString = '';
+
+        if (this.invalidFields) {
+            this.invalidFields.forEach(invalidField => {
+                if (invalidField === this.invalidFields[this.invalidFields.length - 1]) {
+                    invalidFieldsString = invalidFieldsString + invalidField;
+                } else {
+                    invalidFieldsString = invalidFieldsString + invalidField + ', ';
+                }
+            });
+        }
+
+        return invalidFieldsString;
     }
-    switch (event.button) {
-      case 'edit':
-        this.editedAdjustFactor = event.selection.clone();
-        (this.editedAdjustFactor.fator > 0 && this.editedAdjustFactor.fator < 1) ?
-          (this.editedAdjustFactor.fator = this.editedAdjustFactor.fator) : (this.editedAdjustFactor = this.editedAdjustFactor);
-        this.openDialogEditAdjustFactor();
-        break;
-      case 'delete':
-        console.log(event.selection);
-        this.editedAdjustFactor = event.selection.clone();
-        this.confirmDeleteAdjustFactor();
+
+    private subscribeToSaveResponse(result: Observable<Manual>) {
+        result.subscribe((res: Manual) => {
+            this.isSaving = false;
+            this.router.navigate(['/manual']);
+            this.isEdit ? this.pageNotificationService.addUpdateMsg() : this.pageNotificationService.addCreateMsg();
+        },
+            (error: Response) => {
+                this.isSaving = false;
+
+                if (error.headers.toJSON()['x-abacoapp-error'][0] === 'error.manualexists') {
+                    this.pageNotificationService.addErrorMsg(this.getLabel('Cadastros.Manual.msgJaExisteUmManualRegistradoComEsteNome'));
+                    document.getElementById('nome_manual').setAttribute('style', 'border-color: red;');
+                }
+            });
     }
-  }
 
-  isPercentualEnum(value: TipoFatorAjuste) {
+    ngOnDestroy() {
+        this.routeSub.unsubscribe();
+    }
 
-    return (value !== undefined) ? (value.toString() === 'PERCENTUAL') : (false);
-  }
+    uploadFile(event: any) {
+        this.arquivoManual = event.files[0];
+        this.newUpload = true;
+    }
 
-  isUnitaryEnum(value: TipoFatorAjuste) {
-    return (value !== undefined) ? (value.toString() === 'UNITARIO') : (false);
-  }
-  confirmDeletePhaseEffort() {
-    this.confirmationService.confirm({
-      message: 'Tem certeza que deseja excluir o Esforço por fase ' + this.editedPhaseEffort.fase.nome + '?',
-      accept: () => {
-        this.manual.deleteEsforcoFase(this.editedPhaseEffort);
-        this.pageNotificationService.addDeleteMsg();
+    datatableClick(event: DatatableClickEvent) {
+        if (!event.selection) {
+            return;
+        }
+        switch (event.button) {
+            case 'edit':
+                this.editedPhaseEffort = event.selection.clone();
+                this.openDialogEditPhaseEffort();
+                break;
+            case 'delete':
+                this.editedPhaseEffort = event.selection.clone();
+                this.confirmDeletePhaseEffort();
+        }
+    }
+
+    adjustFactorDatatableClick(event: DatatableClickEvent) {
+        if (!event.selection) {
+            return;
+        }
+        switch (event.button) {
+            case 'edit':
+                this.editedAdjustFactor = event.selection.clone();
+                (this.editedAdjustFactor.fator > 0 && this.editedAdjustFactor.fator < 1) ?
+                    (this.editedAdjustFactor.fator = this.editedAdjustFactor.fator) : (this.editedAdjustFactor = this.editedAdjustFactor);
+                this.openDialogEditAdjustFactor();
+                break;
+            case 'delete':
+                this.editedAdjustFactor = event.selection.clone();
+                this.confirmDeleteAdjustFactor();
+        }
+    }
+
+    isPercentualEnum(value: TipoFatorAjuste) {
+        return (value !== undefined) ? (value.toString() === 'PERCENTUAL') : (false);
+    }
+
+    isUnitaryEnum(value: TipoFatorAjuste) {
+        return (value !== undefined) ? (value.toString() === 'UNITARIO') : (false);
+    }
+
+    confirmDeletePhaseEffort() {
+        this.confirmationService.confirm({
+            message: this.getLabel('Cadastros.Manual.Mensagens.msgTemCertezaQueDesejaExcluirEsforcoPorFase') + this.editedPhaseEffort.fase.nome + '?',
+            accept: () => {
+                this.manual.deleteEsforcoFase(this.editedPhaseEffort);
+                this.pageNotificationService.addDeleteMsg();
+                this.editedPhaseEffort = new EsforcoFase();
+            }
+        });
+    }
+
+    confirmDeleteAdjustFactor() {
+        this.confirmationService.confirm({
+            message: this.getLabel('Cadastros.Manual.Mensagens.msgTemCertezaQueDesejaExcluirFatorAjuste') + this.editedAdjustFactor.nome + '?',
+            accept: () => {
+                this.manual.deleteFatoresAjuste(this.editedAdjustFactor);
+                this.pageNotificationService.addDeleteMsg();
+                this.editedAdjustFactor = new FatorAjuste();
+            }
+        });
+    }
+
+    openDialogPhaseEffort(editForm1) {
+        this.newPhaseEffort = new EsforcoFase();
+        this.showDialogPhaseEffort = true;
+    }
+
+    openDialogEditPhaseEffort() {
+        this.showDialogEditPhaseEffort = true;
+    }
+
+    editPhaseEffort() {
+        if (this.checkPhaseEffortRequiredFields(this.editedPhaseEffort)) {
+            this.manual.updateEsforcoFases(this.editedPhaseEffort);
+            //            this.pageNotificationService.addUpdateMsg();
+            this.closeDialogEditPhaseEffort();
+        } else {
+            this.pageNotificationService.addErrorMsg(this.getLabel('Global.Mensagens.FavorPreencherCamposObrigatorios'));
+        }
+    }
+
+    editAdjustFactor() {
+        if (this.checkAdjustFactorRequiredFields(this.editedAdjustFactor)) {
+            this.manual.updateFatoresAjuste(this.editedAdjustFactor);
+            this.pageNotificationService.addUpdateMsg();
+            this.closeDialogEditAdjustFactor();
+        } else {
+            this.pageNotificationService.addErrorMsg(this.getLabel('Global.Mensagens.FavorPreencherCamposObrigatorios'));
+        }
+    }
+
+    closeDialogPhaseEffort() {
+        document.getElementById('tabela-tipo-fase').removeAttribute('style');
+        this.newPhaseEffort = new EsforcoFase();
+        this.showDialogPhaseEffort = false;
+        this.validaEsforco = false;
+        this.validaTipoFase = false;
+    }
+
+    closeDialogEditPhaseEffort() {
         this.editedPhaseEffort = new EsforcoFase();
-      }
-    });
-  }
+        this.showDialogEditPhaseEffort = false;
+    }
 
-  confirmDeleteAdjustFactor() {
-    this.confirmationService.confirm({
-      message: 'Tem certeza que deseja excluir o Fator de Ajuste ' + this.editedAdjustFactor.nome + '?',
-      accept: () => {
-        this.manual.deleteFatoresAjuste(this.editedAdjustFactor);
-        this.pageNotificationService.addDeleteMsg();
+    addPhaseEffort() {
+        this.newPhaseEffort.esforco = this.newPhaseEffort.esforco;
+        if (this.checkPhaseEffortRequiredFields(this.newPhaseEffort)) {
+            this.manual.addEsforcoFases(this.newPhaseEffort);
+            this.pageNotificationService.addCreateMsg();
+            this.closeDialogPhaseEffort();
+        } else {
+            this.pageNotificationService.addErrorMsg(this.getLabel('Global.Mensagens.FavorPreencherCamposObrigatorios'));
+        }
+    }
+
+    private checkPhaseEffortRequiredFields(phaseEffort: EsforcoFase): boolean {
+        let isPhaseNameValid = false;
+        let isPhaseEffortValid = false;
+        let isEffortValid = false;
+
+        (phaseEffort.fase) ? (isPhaseNameValid = true) : (isPhaseNameValid = false);
+
+        if (phaseEffort.fase) {
+            isPhaseNameValid = true;
+        } else {
+            this.validaTipoFase = true;
+            isPhaseNameValid = false;
+        }
+
+        if (phaseEffort.esforco) {
+            isEffortValid = true;
+        } else {
+            this.validaEsforco = true;
+            isEffortValid = false;
+        }
+
+        (isPhaseNameValid && isEffortValid) ? (isPhaseEffortValid = true) : (isPhaseEffortValid = false);
+
+        return isPhaseEffortValid;
+    }
+
+    getPhaseEffortTotalPercentual() {
+        let total = 0;
+        if (this.manual.esforcoFases) {
+            this.manual.esforcoFases.forEach(each => {
+                (each.esforco !== undefined) ? (total = total + each.esforcoFormatado) : (total = total);
+            });
+        }
+
+        return total;
+    }
+
+    openDialogCreateAdjustFactor(editForm2) {
+        this.newAdjustFactor = new FatorAjuste();
+        this.validaTipoDeflator = false;
+        this.validaDeflator = false;
+        this.validaNomeDeflator = false;
+        this.showDialogCreateAdjustFactor = true;
+    }
+
+    closeDialogCreateAdjustFactor() {
+        this.validaTipoDeflator = false;
+        this.validaDeflator = false;
+        this.validaNomeDeflator = false;
+        this.showDialogCreateAdjustFactor = false;
+        this.newAdjustFactor = new FatorAjuste();
+    }
+
+    openDialogEditAdjustFactor() {
+        this.validaTipoDeflator = false;
+        this.validaDeflator = false;
+        this.validaNomeDeflator = false;
+        this.showDialogEditAdjustFactor = true;
+    }
+
+    closeDialogEditAdjustFactor() {
+        this.validaTipoDeflator = false;
+        this.validaDeflator = false;
+        this.validaNomeDeflator = false;
+        this.showDialogEditAdjustFactor = false;
         this.editedAdjustFactor = new FatorAjuste();
-      }
-    });
-  }
-
-  openDialogPhaseEffort() {
-    this.newPhaseEffort = new EsforcoFase();
-    this.showDialogPhaseEffort = true;
-  }
-
-  openDialogEditPhaseEffort() {
-      this.showDialogEditPhaseEffort = true;
-  }
-
-  editPhaseEffort() {
-    if (this.checkPhaseEffortRequiredFields(this.editedPhaseEffort)) {
-      this.manual.updateEsforcoFases(this.editedPhaseEffort);
-      this.pageNotificationService.addUpdateMsg();
-      this.closeDialogEditPhaseEffort();
-    } else {
-      this.pageNotificationService.addErrorMsg('Favor, preencher os campos obrigatórios!');
-    }
-  }
-
-  editAdjustFactor() {
-    if (this.checkAdjustFactorRequiredFields(this.editedAdjustFactor)) {
-      this.manual.updateFatoresAjuste(this.editedAdjustFactor);
-      this.pageNotificationService.addUpdateMsg();
-      this.closeDialogEditAdjustFactor();
-    } else {
-
-    }
-  }
-
-  closeDialogPhaseEffort() {
-    this.newPhaseEffort = new EsforcoFase();
-    this.showDialogPhaseEffort = false;
-  }
-
-  closeDialogEditPhaseEffort() {
-    this.editedPhaseEffort = new EsforcoFase();
-    this.showDialogEditPhaseEffort = false;
-  }
-
-  addPhaseEffort() {
-    this.newPhaseEffort.esforco = this.newPhaseEffort.esforco;
-    if (this.checkPhaseEffortRequiredFields(this.newPhaseEffort)) {
-      this.manual.addEsforcoFases(this.newPhaseEffort);
-      this.pageNotificationService.addCreateMsg();
-      this.closeDialogPhaseEffort();
-    } else {
-      this.pageNotificationService.addErrorMsg('Favor, preencher os campos obrigatórios!');
-    }
-  }
-
-  private resetMarkedFieldsPhaseEffort() {
-    document.getElementById('esforco').setAttribute('style', 'border-bottom: solid; border-bottom-color: #bdbdbd;');
-    document.getElementById('nome_fase').setAttribute('style', 'border-bottom: solid; border-bottom-color: #bdbdbd;');
-  }
-
-  private checkPhaseEffortRequiredFields(phaseEffort: EsforcoFase): boolean {
-    let isPhaseNameValid = false;
-    let isPhaseEffortValid = false;
-    let isEffortValid = false;
-
-    this.resetMarkedFieldsPhaseEffort();
-    (phaseEffort.fase !== undefined) ? (isPhaseNameValid = true) : (isPhaseNameValid = false);
-
-    if (phaseEffort.fase !== undefined)  {
-      isPhaseNameValid = true;
-    } else {
-      isPhaseNameValid = false;
-      document.getElementById('nome_fase').setAttribute('style', 'border-bottom: solid; border-bottom-color: red;');
-      document.getElementById('nome_fase_edit').setAttribute('style', 'border-bottom: solid; border-bottom-color: red;');
     }
 
-    if (phaseEffort.esforco !== undefined && phaseEffort.esforco !== 0) {
-      isEffortValid = true;
-    } else {
-      isEffortValid = false;
-      document.getElementById('esforco').setAttribute('style', 'border-bottom: solid; border-bottom-color: red;');
-      document.getElementById('esforco_edit').setAttribute('style', 'border-bottom: solid; border-bottom-color: red;');
-      console.log(phaseEffort.esforco);
+    addAdjustFactor() {
+        this.newAdjustFactor.ativo = true;
+        if (this.checkAdjustFactorRequiredFields(this.newAdjustFactor)) {
+            this.manual.addFatoresAjuste(this.newAdjustFactor);
+            document.getElementById('tabela-deflator').removeAttribute('style');
+            this.pageNotificationService.addCreateMsg(this.getLabel('Cadastros.Manual.Mensagens.msgDeflatorIncluidoComSucesso'));
+            this.closeDialogCreateAdjustFactor();
+        } else {
+            this.pageNotificationService.addErrorMsg(this.getLabel('Global.Mensagens.FavorPreencherCamposObrigatorios'));
+        }
     }
 
-    (isPhaseNameValid && isEffortValid) ? (isPhaseEffortValid = true) : (isPhaseEffortValid = false);
+    private checkAdjustFactorRequiredFields(adjustFactor: FatorAjuste): boolean {
+        let isNameValid = false;
+        let isAdjustTypeValid = false;
+        let isFactorValid = false;
+        let isAdjustFactorValid = false;
 
-    return isPhaseEffortValid;
-  }
+        (adjustFactor.nome) ? (isNameValid = true) : (isNameValid = false);
 
-  getPhaseEffortTotalPercentual() {
-    let total = 0;
-    this.manual.esforcoFases.forEach(each => {
-      (each.esforco !== undefined) ? (total = total + each.esforcoFormatado) : (total = total);
-    });
+        if (adjustFactor.nome) {
+            isNameValid = true;
+        } else {
+            isNameValid = false;
+            this.validaNomeDeflator = true;
+        }
 
-    return total;
-  }
+        if (adjustFactor.tipoAjuste) {
+            isAdjustTypeValid = true;
+        } else {
+            isAdjustTypeValid = false;
+            this.validaTipoDeflator = true;
+        }
 
-  openDialogCreateAdjustFactor() {
-    this.showDialogCreateAdjustFactor = true;
-  }
+        if (adjustFactor.fator) {
+            isFactorValid = true;
+        } else {
+            isFactorValid = false;
+            this.validaDeflator = true;
+        }
 
-  closeDialogCreateAdjustFactor() {
-    this.showDialogCreateAdjustFactor = false;
-    this.newAdjustFactor = new FatorAjuste();
-  }
+        (isNameValid && isAdjustTypeValid && isFactorValid) ? (isAdjustFactorValid = true) : (isAdjustFactorValid = false);
 
-  openDialogEditAdjustFactor() {
-    this.showDialogEditAdjustFactor = true;
-  }
-
-  closeDialogEditAdjustFactor() {
-      this.showDialogEditAdjustFactor = false;
-      this.editedAdjustFactor = new FatorAjuste();
-  }
-
-  addAdjustFactor() {
-    this.newAdjustFactor.ativo = true;
-    if (this.checkAdjustFactorRequiredFields(this.newAdjustFactor)) {
-      this.manual.addFatoresAjuste(this.newAdjustFactor);
-      this.pageNotificationService.addCreateMsg('Registro incluído com sucesso!');
-      this.closeDialogCreateAdjustFactor();
-    } else {
-      this.pageNotificationService.addErrorMsg('Favor, preencher os campos obrigatórios!');
+        return isAdjustFactorValid;
     }
-  }
 
-  private checkAdjustFactorRequiredFields(adjustFactor: FatorAjuste): boolean {
-    let isNameValid = false;
-    let isAdjustTypeValid = false;
-    let isFactorValid = false;
-    let isCodeValid = false;
-    let isOriginValid = false;
+    private checkRequiredField(field: any) {
+        let isValid = false;
 
-    this.resetMarkedFieldsAdjustFactor();
-    isNameValid = this.checkRequiredField(adjustFactor.nome);
-    isAdjustTypeValid = this.checkRequiredField(adjustFactor.tipoAjuste);
-    isFactorValid = this.checkRequiredField(adjustFactor.fator);
-    isCodeValid = this.checkRequiredField(adjustFactor.codigo);
-    isOriginValid = this.checkRequiredField(adjustFactor.origem);
+        (field) ? (isValid = true) : (isValid = false);
 
-    this.markFieldsAdjustFactor(isNameValid, isAdjustTypeValid, isFactorValid, isCodeValid, isOriginValid);
-    return (isNameValid && isAdjustTypeValid && isFactorValid && isCodeValid && isOriginValid);
-  }
+        return isValid;
+    }
 
-  private checkRequiredField(field: any) {
-    let isValid = false;
+    getFile() {
+        this.uploadService.getFile(this.manual.arquivoManualId).subscribe(response => {
+            this.arquivoManual = response;
+        });
+    }
 
-    (field !== undefined && field !== '' && field !== null) ? (isValid = true) : (isValid = false);
+    getFileInfo() {
+        return this.uploadService.getFile(this.manual.arquivoManualId).subscribe(response => {
+            return response;
+        });
+    }
 
-    return isValid;
-  }
+    public habilitarDeflator(): boolean {
+        if (this.newAdjustFactor.tipoAjuste !== undefined) {
+            return false;
+        }
+        if (this.editedAdjustFactor.tipoAjuste !== undefined) {
+            return false;
+        }
+        return true;
+    }
 
-  private markFieldsAdjustFactor(isNameValid: boolean, isAdjustTypeValid: boolean, isFactorValid: boolean, isCodeValid: boolean, isOriginValid: boolean) {
-      (!isNameValid) ? (document.getElementById('nome_fator_ajuste').setAttribute('style', 'border-color: red;')) : (this);
-      (!isAdjustTypeValid) ? (document.getElementById('tipo_ajuste').setAttribute('style', 'border-bottom: solid; border-bottom-color: red;')) : (this);
-      (!isFactorValid) ? (document.getElementById('valor_fator').setAttribute('style', 'border-bottom: solid; border-bottom-color: red;')) : (this);
-      (!isCodeValid) ? (document.getElementById('codigo_fator').setAttribute('style', 'border-color: red;')) : (this);
-      (!isOriginValid) ? (document.getElementById('origem_fator').setAttribute('style', 'border-color: red;')) : (this);
-  }
-
-  private resetMarkedFieldsAdjustFactor() {
-    document.getElementById('nome_fator_ajuste').setAttribute('style', 'border-color: #bdbdbd;');
-    document.getElementById('tipo_ajuste').setAttribute('style', 'border-bottom: solid; border-bottom-color: #bdbdbd;');
-    document.getElementById('valor_fator').setAttribute('style', 'border-color: #bdbdbd;');
-    document.getElementById('codigo_fator').setAttribute('style', 'border-color: #bdbdbd;');
-    document.getElementById('origem_fator').setAttribute('style', 'border-color: #bdbdbd;');
-  }
-  getFile() {
-    this.loading = true;
-    this.uploadService.getFile(this.manual.arquivoManualId).subscribe(response => {
-
-      let fileInfo;
-      // tslint:disable-next-line:no-shadowed-variable
-      this.uploadService.getFileInfo(this.manual.arquivoManualId).subscribe(response => {
-        fileInfo = response;
-
-        this.fileInput.files.push(new File([response['_body']], fileInfo['originalName']));
-        this.loading = false;
-      });
-    });
-  }
-
-  getFileInfo() {
-    return this.uploadService.getFile(this.manual.arquivoManualId).subscribe(response => {
-      return response;
-    });
-  }
+    fecharEsforcoFase() {
+        this.newPhaseEffort = new EsforcoFase();
+        this.showDialogPhaseEffort = false;
+        this.validaEsforco = false;
+        this.validaTipoFase = false;
+    }
 }

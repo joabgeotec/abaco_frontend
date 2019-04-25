@@ -1,3 +1,4 @@
+import { TranslateService } from '@ngx-translate/core';
 import {
   Component,
   ViewChild,
@@ -28,6 +29,12 @@ export class MemoryDatatableComponent implements AfterViewInit {
   @Input()
   deleteEventName = 'delete';
 
+  @Input()
+  cloneEventName = 'clone';
+
+  @Input()
+  crudEventName = 'crud';
+
   selectedRow: any;
 
   @Input()
@@ -37,7 +44,16 @@ export class MemoryDatatableComponent implements AfterViewInit {
   disableDelete: boolean;
 
   @Input()
-  responsive = false;
+  disableClone: boolean;
+
+  @Input()
+  disableCrud: boolean;
+
+  @Input()
+  showCrud: boolean = false;
+
+  @Input()
+  responsive = true;
 
   @Input()
   scrollable = false;
@@ -45,8 +61,19 @@ export class MemoryDatatableComponent implements AfterViewInit {
   @Input()
   scrollWidth = '';
 
+  @Input()
+  rows = 10;
+
+  @Input()
+  paginator = false;
+
+  sortF: string;
+
   @Output()
   buttonClick: EventEmitter<DatatableClickEvent> = new EventEmitter<DatatableClickEvent>();
+
+  @Output()
+  selectRow: EventEmitter<any> = new EventEmitter();
 
   @ViewChild(DataTable)
   primeDatatableComponent: any;
@@ -54,7 +81,15 @@ export class MemoryDatatableComponent implements AfterViewInit {
   @ContentChildren(Column)
   cols: QueryList<Column>;
 
-  constructor(private changeDetectorRef: ChangeDetectorRef) { }
+  constructor(private changeDetectorRef: ChangeDetectorRef, private translate: TranslateService) { }
+
+  getLabel(label) {
+    let str: any;
+    this.translate.get(label).subscribe((res: string) => {
+      str = res;
+    }).unsubscribe();
+    return str;
+  }
 
   ngAfterViewInit() {
     this.primeDatatableComponent.cols = this.cols;
@@ -70,8 +105,15 @@ export class MemoryDatatableComponent implements AfterViewInit {
 
   resetSelectedRow(button: string) {
     if (button === 'delete') {
-        this.selectedRow = null;
+      this.selectedRow = null;
     }
   }
 
+  changeSort(event) {
+    this.sortF = event.field;
+  }
+
+  onRowSelect(event) {
+    this.selectRow.emit(event);
+    }
 }

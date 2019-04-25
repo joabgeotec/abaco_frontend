@@ -3,6 +3,7 @@
 <div class="ui-g">
   <div class="ui-g-12">
     <textarea pInputTextarea
+     maxlength = "255"
       [(ngModel)]="text"
       style="white-space: nowrap; overflow: auto;"
       [autoResize]="false"
@@ -10,19 +11,19 @@
       (keyup.backspace)="textChanged()"
       (keyup.delete)="textChanged()"
       (change)="textChanged()"
-      [rows]="6" [cols]="180"
+      [rows]="20" [cols]="180"
       name="{{ label }}">
     </textarea>
   </div>
 
   <div class="ui-g-12">
     <span>
-      Total: {{ showTotal() }}
+      {{this.getLabel('Analise.Analise.Total')}} {{ showTotal() }}
     </span>
   </div>
   <div class="ui-g-12" *ngIf="deveMostrarDuplicatas()">
     <span >
-      Valores duplicados: {{ parseResult.duplicatasFormatadas() }}
+      {{this.getLabel('Analise.Analise.ValoresDuplicados:')}} {{ parseResult.duplicatasFormatadas() }}
     </span>
   </div>
 </div>

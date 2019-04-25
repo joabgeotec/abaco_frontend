@@ -1,113 +1,202 @@
+import { TranslateService } from '@ngx-translate/core';
 import {
-  Component,
-  Input,
-  Output,
-  EventEmitter,
-  OnInit,
-  OnDestroy,
+    Component,
+    Input,
+    Output,
+    EventEmitter,
+    OnInit,
+    OnDestroy,
 } from '@angular/core';
 
-import { AnaliseSharedDataService } from '../../../shared/analise-shared-data.service';
-import { Analise } from '../../../analise/analise.model';
-import { FuncaoDados } from '../../../funcao-dados/funcao-dados.model';
-import { Der } from '../../../der/der.model';
-import { Subscription } from 'rxjs/Subscription';
+import {AnaliseSharedDataService} from '../../../shared/analise-shared-data.service';
+import {Analise} from '../../../analise/analise.model';
+import { AnaliseService } from './../../../analise/analise.service';
+import {FuncaoDados} from '../../../funcao-dados/funcao-dados.model';
+import {Der} from '../../../der/der.model';
+import {Subscription} from 'rxjs/Subscription';
+import {ResponseWrapper} from '../../../shared';
+import {BaselineService} from '../../../baseline';
 
 @Component({
-  selector: 'app-analise-referenciador-ar',
-  templateUrl: './referenciador-ar.component.html'
+    selector: 'app-analise-referenciador-ar',
+    templateUrl: './referenciador-ar.component.html'
 })
 export class ReferenciadorArComponent implements OnInit, OnDestroy {
 
-  @Output()
-  dersReferenciadosEvent: EventEmitter<Der[]> = new EventEmitter<Der[]>();
+    @Output()
+    dersReferenciadosEvent: EventEmitter<Der[]> = new EventEmitter<Der[]>();
 
-  @Output()
-  funcaoDadosReferenciadaEvent: EventEmitter<string> = new EventEmitter<string>();
+    @Output()
+    funcaoDadosReferenciadaEvent: EventEmitter<string> = new EventEmitter<string>();
 
-  private subscriptionAnaliseCarregada: Subscription;
+    private subscriptionAnaliseCarregada: Subscription;
 
-  funcoesDados: FuncaoDados[] = [];
+    funcoesDados: FuncaoDados[] = [];
 
-  ders: Der[] = [];
+    funcoesDadosCache: FuncaoDados[] = [];
 
-  mostrarDialog = false;
+    ders: Der[] = [];
 
-  funcaoDadosSelecionada: FuncaoDados;
+    derMsg: Der = new Der(1, 'Mensagem');
+    derAcao: Der = new Der(2, 'Ação');
 
-  dersReferenciados: Der[] = [];
+    idAnalise: number;
 
-  valorVariavel: string;
+    mostrarDialog = false;
 
-  constructor(
-    private analiseSharedDataService: AnaliseSharedDataService,
-  ) { }
+    funcaoDadosSelecionada: FuncaoDados;
 
-  ngOnInit() {
-    // TODO quais eventos observar?
-    // precisa de um evento de funcaoDados adicionada?
-    this.subscribeAnaliseCarregada();
-  }
+    dersReferenciados: Der[] = [];
 
-  private subscribeAnaliseCarregada() {
-    this.subscriptionAnaliseCarregada = this.analiseSharedDataService.getLoadSubject().subscribe(() => {
-      this.funcoesDados = this.analiseSharedDataService.analise.funcaoDados;
-    });
-  }
+    valorVariavel: string;
 
-  abrirDialog() {
-    if (this.habilitarBotaoAbrirDialog()) {
-      this.mostrarDialog = true;
+    constructor(
+        private analiseSharedDataService: AnaliseSharedDataService,
+        private analiseService: AnaliseService,
+        private baselineService: BaselineService,
+        private translate: TranslateService
+    ) {
     }
-  }
 
-  habilitarBotaoAbrirDialog(): boolean {
-    if (!this.funcoesDados) {
-      return false;
+    getLabel(label) {
+        let str: any;
+        this.translate.get(label).subscribe((res: string) => {
+            str = res;
+        }).unsubscribe();
+        return str;
     }
-    return this.funcoesDados.length > 0;
-  }
 
-  funcoesDadosDropdownPlaceholder(): string {
-    return 'Selecione uma Função Dados';
-  }
-
-  funcaoDadosSelected(fd: FuncaoDados) {
-    this.funcaoDadosSelecionada = fd;
-    this.ders = fd.ders;
-  }
-
-  dersMultiSelectedPlaceholder(): string {
-    if (!this.funcaoDadosSelecionada) {
-      return 'DERs - Selecione uma Função de Dados para selecionar quais DERs referenciar';
-    } else if (this.funcaoDadosSelecionada) {
-      return 'Selecione quais DERs deseja referenciar';
+    ngOnInit() {
+        // TODO quais eventos observar?
+        // precisa de um evento de funcaoDados adicionada  
+        this.subscribeAnaliseCarregada();     
     }
-  }
 
-  relacionar() {
-    this.dersReferenciados.forEach(der => {
-      der.id = undefined;
-    });
-    this.dersReferenciadosEvent.emit(this.dersReferenciados);
-    // XXX vai precisar relacionar qual funcao de dados foi relacionada?
-    this.funcaoDadosReferenciadaEvent.emit(this.funcaoDadosSelecionada.name);
-    this.fecharDialog();
-  }
+    private getFuncoesDados(): FuncaoDados[] {
+        return this.analise.funcaoDados;
+    }
 
-  fecharDialog() {
-    this.resetarCampos();
-    this.mostrarDialog = false;
-  }
+    private get analise(): Analise {
+        return this.analiseSharedDataService.analise;
+    }
 
-  private resetarCampos() {
-    this.funcaoDadosSelecionada = undefined;
-    this.ders = [];
-    this.dersReferenciados = [];
-  }
+    private getAnalisesBaseline() {
+        this.analiseService.findAllBaseline().subscribe(res => {
+            let analises = this.analiseService.convertJsonToAnalise(res);
+            this.carregarFuncaoDadosBaseline(analises);
+        });
+    }
 
-  ngOnDestroy() {
+    public carregarFuncaoDadosBaseline(analises: Analise[]) {
 
-  }
+        let funcoesDadosBaseline: FuncaoDados[] = [];
+
+        for (let analise of analises) {
+            let fds: FuncaoDados[] = analise.funcaoDados;
+            
+            for (let fd of fds) {
+                funcoesDadosBaseline.push(fd);
+            }
+        }
+
+        this.funcoesDados = this.funcoesDados.concat(funcoesDadosBaseline);
+        //this.funcoesDados = funcoesDadosBaseline;
+
+    }
+
+    private subscribeAnaliseCarregada() {
+        
+        this.subscriptionAnaliseCarregada = this.analiseSharedDataService.getLoadSubject().subscribe(() => {
+            
+            this.funcoesDadosCache = this.analiseSharedDataService.analise.funcaoDados;
+
+            this.baselineService.analiticosFuncaoDados(
+                this.analiseSharedDataService.analise.sistema.id).subscribe((res: ResponseWrapper) => {
+                this.funcoesDados = res.json;
+
+                this.funcoesDados.concat(this.funcoesDadosCache);
+                if (this.funcoesDados.length !== 0) {
+                    for (const funcoes of this.funcoesDadosCache) {
+                        if (this.funcoesDados.indexOf(funcoes) === -1) {
+                            this.funcoesDados.push(funcoes);
+                        }
+                    }
+                } else {
+                    this.funcoesDados = this.funcoesDadosCache;
+                }
+            });
+        });
+    }
+
+
+    findIndexToUpdate(newItem) {
+        return newItem.id === this;
+    }
+
+    abrirDialog() {
+        this.funcoesDados = [];
+        this.funcoesDados = this.getFuncoesDados();
+        this.getAnalisesBaseline();
+        //if (this.habilitarBotaoAbrirDialog()) {
+        this.subscribeAnaliseCarregada();
+        this.mostrarDialog = true;
+        //}
+    }
+
+    habilitarBotaoAbrirDialog(): boolean {
+        /*if (!this.funcoesDados) {
+            return false;
+        }
+        return this.funcoesDados.length > 0;
+        */
+        return true;
+    }
+
+    funcoesDadosDropdownPlaceholder(): string {
+        return this.getLabel('Analise.Analise.Mensagens.msgSelecioneFuncaoDados');
+    }
+
+    funcaoDadosSelected(fd: FuncaoDados) {
+        this.funcaoDadosSelecionada = fd;
+        this.ders = this.funcaoDadosSelecionada.ders;
+        if( !this.ders.some( der => (der.nome === 'Mensagem' || der.nome === 'Ação'))){
+            this.ders.push(this.derMsg, this.derAcao);
+        }
+    }
+
+    dersMultiSelectedPlaceholder(): string {
+        if (!this.funcaoDadosSelecionada) {
+            return this.getLabel('Analise.Analise.Mensagens.msgSelecioneFuncaoDadosParaSelecionarDERsReferenciar');
+        }
+        return this.getLabel('Analise.Analise.Mensagens.msgSelecioneQuaisDERsReferenciar');
+        
+    }
+
+    relacionar() {
+        if (this.dersReferenciados) {
+            this.dersReferenciados.forEach(der => {
+                der.id = undefined;
+            });
+        }
+        this.dersReferenciadosEvent.emit(this.dersReferenciados);
+        // XXX vai precisar relacionar qual funcao de dados foi relacionada?
+        this.funcaoDadosReferenciadaEvent.emit(this.funcaoDadosSelecionada.name);
+        this.fecharDialog();
+    }
+
+    fecharDialog() {
+        this.resetarCampos();
+        this.mostrarDialog = false;
+    }
+
+    private resetarCampos() {
+        this.funcaoDadosSelecionada = undefined;
+        this.ders = [];
+        this.dersReferenciados = [];
+    }
+
+    ngOnDestroy() {
+
+    }
 
 }

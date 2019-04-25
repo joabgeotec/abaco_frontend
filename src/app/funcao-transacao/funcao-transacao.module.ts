@@ -20,7 +20,8 @@ import {
   ConfirmationService,
   TabViewModule,
   InputTextareaModule,
-  DialogModule
+  DialogModule,
+  AutoCompleteModule
 } from 'primeng/primeng';
 
 import {
@@ -28,6 +29,15 @@ import {
 } from './';
 import { AbacoAnaliseBotaoSalvarModule } from '../analise-shared/botao-salvar/analise-botao-salvar.module';
 import { AbacoDerChipsModule } from '../analise-shared/der-chips/der-chips.module';
+import { FuncaoTransacaoService } from './funcao-transacao.service';
+
+import { HttpClient } from '@angular/common/http';
+import { TranslateHttpLoader } from '@ngx-translate/http-loader';
+import { TranslateModule, TranslateLoader } from '@ngx-translate/core';
+
+export function createTranslateLoader(http: HttpClient) {
+    return new TranslateHttpLoader(http, './assets/i18n/', '.json');
+  }
 
 @NgModule({
   imports: [
@@ -50,7 +60,15 @@ import { AbacoDerChipsModule } from '../analise-shared/der-chips/der-chips.modul
     AbacoAnaliseSharedModule,
     MemoryDataTableModule,
     AbacoAnaliseBotaoSalvarModule,
-    AbacoDerChipsModule
+    AbacoDerChipsModule,
+    AutoCompleteModule,
+    TranslateModule.forChild({
+      loader: {
+        provide: TranslateLoader,
+        useFactory: (createTranslateLoader),
+        deps: [HttpClient]
+      }
+    })
   ],
   declarations: [
     FuncaoTransacaoFormComponent
@@ -59,7 +77,8 @@ import { AbacoDerChipsModule } from '../analise-shared/der-chips/der-chips.modul
     FuncaoTransacaoFormComponent
   ],
   providers: [
-    ConfirmationService
+    ConfirmationService,
+    FuncaoTransacaoService
   ]
 })
 export class AbacoFuncaoTransacaoModule {}

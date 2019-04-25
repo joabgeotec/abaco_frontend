@@ -1,489 +1,768 @@
-import { Component, OnInit, Input, ChangeDetectorRef, OnDestroy } from '@angular/core';
-import { AnaliseSharedDataService, PageNotificationService } from '../shared';
-import { FuncaoTransacao, TipoFuncaoTransacao } from './funcao-transacao.model';
+import { TranslateService } from '@ngx-translate/core';
+import { AnaliseSharedUtils } from './../analise-shared/analise-shared-utils';
+import { BaselineService } from './../baseline/baseline.service';
+import { FuncaoDadosService } from './../funcao-dados/funcao-dados.service';
+import { BaselineAnalitico } from './../baseline/baseline-analitico.model';
+import { Component, OnInit, ChangeDetectorRef, OnDestroy, Input, Output, EventEmitter } from '@angular/core';
+import { AnaliseSharedDataService, PageNotificationService, ResponseWrapper, EntityToJSON } from '../shared';
 import { Analise, AnaliseService } from '../analise';
 import { FatorAjuste } from '../fator-ajuste';
 
 import * as _ from 'lodash';
-import { Modulo } from '../modulo/index';
 import { Funcionalidade } from '../funcionalidade/index';
-import { CalculadoraTransacao } from '../analise-shared/calculadora-transacao';
 import { SelectItem } from 'primeng/primeng';
+import { BlockUI, NgBlockUI } from 'ng-block-ui';
 import { DatatableClickEvent } from '@basis/angular-components';
 import { ConfirmationService } from 'primeng/primeng';
 import { ResumoFuncoes } from '../analise-shared/resumo-funcoes';
 import { Subscription } from 'rxjs/Subscription';
-import { DerChipItem } from '../analise-shared/der-chips/der-chip-item';
-import { AnaliseReferenciavel } from '../analise-shared/analise-referenciavel';
-import { DerChipConverter } from '../analise-shared/der-chips/der-chip-converter';
-import { Der } from '../der/der.model';
-import { Manual } from '../manual';
+
 import { FatorAjusteLabelGenerator } from '../shared/fator-ajuste-label-generator';
+import { DerChipItem } from '../analise-shared/der-chips/der-chip-item';
+import { DerChipConverter } from '../analise-shared/der-chips/der-chip-converter';
+import { AnaliseReferenciavel } from '../analise-shared/analise-referenciavel';
+import { Manual } from '../manual';
+import { Modulo } from '../modulo';
+import { CalculadoraTransacao } from '../analise-shared';
+import { FuncaoTransacao, TipoFuncaoTransacao } from './funcao-transacao.model';
+import { Der } from '../der/der.model';
+import { Impacto } from '../analise-shared/impacto-enum';
+import { DerTextParser, ParseResult } from '../analise-shared/der-text/der-text-parser';
+import { loginRoute } from '../login';
+import { FuncaoTransacaoService } from './funcao-transacao.service';
+import { debug } from 'util';
+
+
 
 @Component({
-  selector: 'app-analise-funcao-transacao',
-  templateUrl: './funcao-transacao-form.component.html'
+    selector: 'app-analise-funcao-transacao',
+    templateUrl: './funcao-transacao-form.component.html'
 })
 export class FuncaoTransacaoFormComponent implements OnInit, OnDestroy {
 
-  isEdit: boolean;
+    @BlockUI() blockUI: NgBlockUI;      // Usado para bloquear o sistema enquanto aguarda resolução das requisições do backend
 
-  isEstimada: boolean;
+    faS: FatorAjuste[];
 
-  dersChips: DerChipItem[] = [];
+    textHeader: string;
+    @Input() isView: boolean;
+    isEdit: boolean;
+    nomeInvalido;
+    classInvalida;
+    impactoInvalido: boolean;
+    deflatorVazio: boolean;
+    hideElementTDTR: boolean;
+    hideShowQuantidade: boolean;
+    showDialog = false;
+    sugestoesAutoComplete: string[] = [];
+    windowHeightDialog: any;
+    windowWidthDialog: any;
+    impactos: string[];
 
-  alrsChips: DerChipItem[] = [];
 
-  resumo: ResumoFuncoes;
+    moduloCache: Funcionalidade;
+    dersChips: DerChipItem[];
+    alrsChips: DerChipItem[];
+    resumo: ResumoFuncoes;
+    fatoresAjuste: SelectItem[] = [];
+    dadosBaselineFT: BaselineAnalitico[] = [];
+    dadosserviceBL: BaselineService[] = [];
+    funcoesTransacaoList: FuncaoTransacao[] = [];
+    FuncaoTransacaoEditar: FuncaoTransacao;
 
-  fatoresAjuste: SelectItem[] = [];
+    impacto: SelectItem[] = [
+        { label: 'Inclusão', value: 'INCLUSAO' },
+        { label: 'Alteração', value: 'ALTERACAO' },
+        { label: 'Exclusão', value: 'EXCLUSAO' },
+        { label: 'Conversão', value: 'CONVERSAO' },
+        { label: 'Outros', value: 'ITENS_NAO_MENSURAVEIS' }
+    ];
 
-  classificacoes: SelectItem[] = [];
+    baselineResultados: any[] = [];
 
-  colunasAMostrar = [];
+    classificacoes: SelectItem[] = [];
 
-  colunasOptions: SelectItem[];
+    @Output()
+    valueChange: EventEmitter<string> = new EventEmitter<string>();
+    parseResult: ParseResult;
+    text: string;
+    @Input()
+    label: string;
+    showMultiplos = false;
 
-  impacto: SelectItem[] = [
-    { label: 'Inclusão', value: 'Inclusão' },
-    { label: 'Alteração', value: 'Alteração' },
-    { label: 'Exclusão', value: 'Exclusão' },
-    { label: 'Conversão', value: 'Conversão' }
-  ];
+    private fatorAjusteNenhumSelectItem = { label: 'Nenhum', value: undefined };
+    private analiseCarregadaSubscription: Subscription;
+    private subscriptionSistemaSelecionado: Subscription;
+    private nomeDasFuncoesDoSistema: string[] = [];
+    public erroModulo: boolean;
+    public erroTR: boolean;
+    public erroTD: boolean;
+    public erroUnitario: boolean;
+    public erroDeflator: boolean;
 
-  private fatorAjusteNenhumSelectItem = { label: 'Nenhum', value: undefined };
 
-  showDialogNovo = false;
-
-  private analiseCarregadaSubscription: Subscription;
-
-  constructor(
-    private analiseSharedDataService: AnaliseSharedDataService,
-    private confirmationService: ConfirmationService,
-    private pageNotificationService: PageNotificationService,
-    private changeDetectorRef: ChangeDetectorRef,
-    private analiseService: AnaliseService,
-  ) { }
-
-  /**
-   *
-  **/
-  ngOnInit() {
-    this.isEdit = false;
-    this.iniciarObjetos();
-    this.subscribeToAnaliseCarregada();
-    this.initClassificacoes();
-  }
-
-  /**
-   *
-  **/
-  private iniciarObjetos() {
-    this.currentFuncaoTransacao = new FuncaoTransacao();
-    this.currentFuncaoTransacao.funcionalidade = new Funcionalidade();
-  }
-
-  /**
-   *
-  **/
-  private subscribeToAnaliseCarregada() {
-    this.analiseCarregadaSubscription = this.analiseSharedDataService.getLoadSubject().subscribe(() => {
-      this.atualizaResumo();
-    });
-  }
-
-  /**
-   *
-  **/
-  private atualizaResumo() {
-    this.resumo = this.analise.resumoFuncaoTransacoes;
-    this.changeDetectorRef.detectChanges();
-  }
-
-  /**
-   *
-  **/
-  private initClassificacoes() {
-    const classificacoes = Object.keys(TipoFuncaoTransacao).map(k => TipoFuncaoTransacao[k as any]);
-    // TODO pipe generico?
-    classificacoes.forEach(c => {
-      this.classificacoes.push({ label: c, value: c });
-    });
-  }
-
-  /**
-   *
-  **/
-  get header(): string {
-    return !this.isEdit ? 'Adicionar Função de Transação' : 'Alterar Função de Transação';
-  }
-
-  /**
-   *
-  **/
-  get currentFuncaoTransacao(): FuncaoTransacao {
-    return this.analiseSharedDataService.currentFuncaoTransacao;
-  }
-
-  /**
-   *
-  **/
-  set currentFuncaoTransacao(currentFuncaoTransacao: FuncaoTransacao) {
-    this.analiseSharedDataService.currentFuncaoTransacao = currentFuncaoTransacao;
-  }
-
-  /**
-   *
-  **/
-  get funcoesTransacoes(): FuncaoTransacao[] {
-    if (!this.analise.funcaoTransacaos) {
-      return [];
-    }
-    return this.analise.funcaoTransacaos;
-  }
-
-  /**
-   *
-  **/
-  private get analise(): Analise {
-    this.isEstimada = this.analiseSharedDataService.analise.metodoContagem  === 'ESTIMADA';
-    return this.analiseSharedDataService.analise;
-  }
-
-  /**
-   *
-  **/
-  private set analise(analise: Analise) {
-    this.analiseSharedDataService.analise = analise;
-  }
-
-  /**
-   *
-  **/
-  private get manual() {
-    if (this.analiseSharedDataService.analise.contrato) {
-      return this.analiseSharedDataService.analise.contrato.manual;
-    }
-    return undefined;
-  }
-
-  /**
-   *
-  **/
-  isContratoSelected(): boolean {
-    // FIXME p-dropdown requer 2 clicks quando o [options] chama um método get()
-    const isContratoSelected = this.analiseSharedDataService.isContratoSelected();
-    if (isContratoSelected && this.fatoresAjuste.length === 0) {
-      this.inicializaFatoresAjuste(this.manual);
-    }
-    return isContratoSelected;
-  }
-
-  /**
-   *
-  **/
-  fatoresAjusteDropdownPlaceholder() {
-    if (this.isContratoSelected()) {
-      return 'Selecione um Deflator';
-    } else {
-      return `Selecione um Contrato na aba 'Geral' para carregar os Deflatores`;
-    }
-  }
-
-  /**
-   *
-  **/
-  moduloSelected(modulo: Modulo) {
-  }
-
-  /**
-   *
-  **/
-  funcionalidadeSelected(funcionalidade: Funcionalidade) {
-    this.currentFuncaoTransacao.funcionalidade = funcionalidade;
-  }
-
-  /**
-   *
-  **/
-  isFuncionalidadeSelected(): boolean {
-    return !_.isUndefined(this.currentFuncaoTransacao.funcionalidade);
-  }
-
-  /**
-   *
-  **/
-  deveHabilitarBotaoAdicionar(): boolean {
-    // TODO complementar com outras validacoes
-    return this.isFuncionalidadeSelected() && !_.isUndefined(this.analise.metodoContagem);
-  }
-
-  /**
-   *
-  **/
-  get labelBotaoAdicionar() {
-    return !this.isEdit ? 'Adicionar' : 'Alterar';
-  }
-
-  /**
-   *
-  **/
-  adicionar() {
-    this.adicionarOuSalvar();
-    this.salvarAnalise();
-  }
-
-  salvarAnalise() {
-    this.analiseService.update(this.analise);
-  }
-
-  /**
-   *
-  **/
-  private adicionarOuSalvar() {
-    this.desconverterChips();
-    this.doAdicionarOuSalvar();
-    this.isEdit = false;
-  }
-
-  /**
-   *
-  **/
-  private desconverterChips() {
-    this.currentFuncaoTransacao.ders = DerChipConverter.desconverterEmDers(this.dersChips);
-    this.currentFuncaoTransacao.alrs = DerChipConverter.desconverterEmAlrs(this.alrsChips);
-  }
-
-  /**
-   *
-  **/
-  private doAdicionarOuSalvar() {
-    if (this.isEdit) {
-      this.doEditar();
-    } else {
-      this.doAdicionar();
-    }
-  }
-
-  /**
-   *
-  **/
-  private doEditar() {
-    const funcaoTransacaoCalculada = CalculadoraTransacao.calcular(
-      this.analise.metodoContagem, this.currentFuncaoTransacao, this.analise.contrato.manual
-    );
-    // TODO temporal coupling
-    this.analise.updateFuncaoTransacao(funcaoTransacaoCalculada);
-    this.atualizaResumo();
-    this.pageNotificationService.addSuccessMsg(`Função de Transação '${funcaoTransacaoCalculada.name}' alterada com sucesso`);
-    this.resetarEstadoPosSalvar();
-  }
-
-  /**
-   *
-  **/
-  private resetarEstadoPosSalvar() {
-    this.iniciarObjetos();
-
-    // Mantendo o mesmo conteudo a pedido do Leandro
-    // this.currentFuncaoTransacao = this.currentFuncaoTransacao.clone();
-
-    // TODO inappropriate intimacy DEMAIS
-    this.currentFuncaoTransacao.artificialId = undefined;
-    this.currentFuncaoTransacao.id = undefined;
-
-    // clonando mas forçando novos a serem persistidos
-    this.dersChips.forEach(c => c.id = undefined);
-    this.alrsChips.forEach(c => c.id = undefined);
-  }
-
-  /**
-   *
-  **/
-  private doAdicionar() {
-    const funcaoTransacaoCalculada = CalculadoraTransacao.calcular(
-      this.analise.metodoContagem, this.currentFuncaoTransacao, this.analise.contrato.manual);
-    // TODO temporal coupling entre 1-add() e 2-atualizaResumo(). 2 tem que ser chamado depois
-    this.analise.addFuncaoTransacao(funcaoTransacaoCalculada);
-    this.atualizaResumo();
-    this.pageNotificationService.addCreateMsgWithName(funcaoTransacaoCalculada.name);
-    this.resetarEstadoPosSalvar();
-  }
-
-  /**
-   *
-  **/
-  datatableClick(event: DatatableClickEvent) {
-    if (!event.selection) {
-      return;
+    constructor(
+        private analiseSharedDataService: AnaliseSharedDataService,
+        private confirmationService: ConfirmationService,
+        private pageNotificationService: PageNotificationService,
+        private changeDetectorRef: ChangeDetectorRef,
+        private funcaoDadosService: FuncaoDadosService,
+        private analiseService: AnaliseService,
+        private baselineService: BaselineService,
+        private funcaoTransacaoService: FuncaoTransacaoService,
+        private translate: TranslateService
+    ) {
     }
 
-    const funcaoSelecionada: FuncaoTransacao = event.selection.clone();
-    switch (event.button) {
-      case 'edit':
-        this.isEdit = true;
-        this.showDialogNovo = true;
-        this.prepararParaEdicao(funcaoSelecionada);
-        break;
-      case 'delete':
-      this.confirmDelete(funcaoSelecionada);
-    }
-  }
-
-  /**
-   *
-  **/
-  private prepararParaEdicao(funcaoSelecionada: FuncaoTransacao) {
-    this.analiseSharedDataService.currentFuncaoTransacao = funcaoSelecionada;
-    this.scrollParaInicioDaAba();
-    this.carregarValoresNaPaginaParaEdicao(funcaoSelecionada);
-    this.pageNotificationService.addInfoMsg(`Alterando Função de Transação '${funcaoSelecionada.name}'`);
-  }
-
-  /**
-   *
-  **/
-  private scrollParaInicioDaAba() {
-    window.scrollTo(0, 60);
-  }
-
-  /**
-   *
-  **/
-  private carregarValoresNaPaginaParaEdicao(funcaoSelecionada: FuncaoTransacao) {
-    this.analiseSharedDataService.funcaoAnaliseCarregada();
-
-    if (funcaoSelecionada.fatorAjuste !== undefined && !funcaoSelecionada.fatorAjuste) {
-      this.carregarFatorDeAjusteNaEdicao(funcaoSelecionada);
+    getLabel(label) {
+        let str: any;
+        this.translate.get(label).subscribe((res: string) => {
+            str = res;
+        }).unsubscribe();
+        return str;
     }
 
-    this.carregarDerEAlr(funcaoSelecionada);
-  }
-
-  /**
-   * Método responsável por recuperar os fatores de ajustes quando se tratar de edição.
-  **/
-  private carregarFatorDeAjusteNaEdicao(funcaoSelecionada: FuncaoTransacao) {
-    this.inicializaFatoresAjuste(this.manual);
-    funcaoSelecionada.fatorAjuste = _.find(this.fatoresAjuste, {value: { 'id': funcaoSelecionada.fatorAjuste.id }} ).value;
-  }
-
-  /**
-   * Método responsável por recuperar DER e ALR.
-  **/
-  private carregarDerEAlr(ft: FuncaoTransacao) {
-    this.dersChips = this.carregarReferenciavel(ft.ders, ft.derValues);
-    this.alrsChips = this.carregarReferenciavel(ft.alrs, ft.ftrValues);
-  }
-
-  /**
-   * Método responsável por recuperar das referências AR.
-  **/
-  private carregarReferenciavel(referenciaveis: AnaliseReferenciavel[], strValues: string[]): DerChipItem[] {
-    if (referenciaveis && referenciaveis.length > 0) { // situacao para analises novas e editadas
-      return DerChipConverter.converterReferenciaveis(referenciaveis);
-    } else { // SITUACAO para analises legadas
-      return DerChipConverter.converter(strValues);
+    ngOnInit() {
+        this.estadoInicial();
+        this.hideShowQuantidade = true;
+        this.currentFuncaoTransacao = new FuncaoTransacao();
+        this.subscribeToAnaliseCarregada();
+        this.initClassificacoes();
+        this.impactos = AnaliseSharedUtils.impactos;
     }
-  }
 
-  /**
-   *
-  **/
-  dersReferenciados(ders: Der[]) {
-    // XXX manter os ids?
-    const dersReferenciadosChips: DerChipItem[] = DerChipConverter.converterReferenciaveis(ders);
-    this.dersChips = this.dersChips.concat(dersReferenciadosChips);
-  }
-
-  /**
-   * Método responsável por cancelar e fechar a modal de alteração do formulário.
-  **/
-  cancelar() {
-    this.limparDadosDaTelaNaEdicaoCancelada();
-    this.showDialogNovo = false;
-  }
-
-  /**
-   *
-  **/
-  cancelarEdicao() {
-    this.showDialogNovo = false;
-    this.analiseSharedDataService.funcaoAnaliseDescarregada();
-    this.isEdit = false;
-    this.limparDadosDaTelaNaEdicaoCancelada();
-    this.pageNotificationService.addInfoMsg('Alteração cancelada.');
-    this.scrollParaInicioDaAba();
-  }
-
-  /**
-   *
-  **/
-  cancelarEdicaoDialog() {
-    this.confirmationService.confirm({
-      message: `Tem certeza que deseja cancelar a alteração?`,
-      accept: () => {
+    estadoInicial() {
         this.analiseSharedDataService.funcaoAnaliseDescarregada();
-        this.isEdit = false;
-        this.showDialogNovo = false;
-        this.pageNotificationService.addInfoMsg('Alteração cancelada.');
-      }
-    });
-  }
+        this.currentFuncaoTransacao = new FuncaoTransacao();
+        this.dersChips = [];
+        this.alrsChips = [];
+        this.traduzirImpactos();
+    }
 
-  /**
-   *
-  **/
-  private limparDadosDaTelaNaEdicaoCancelada() {
-    this.iniciarObjetos();
-    this.dersChips = [];
-    this.alrsChips = [];
-  }
+    public onRowDblclick(event) {
+        if (event.target.nodeName === 'TD') {
+            this.abrirEditar();
+        } else if (event.target.parentNode.nodeName === 'TD') {
+            this.abrirEditar();
+        }
+    }
 
-  /**
-   *
-  **/
-  confirmDelete(funcaoTransacaoSelecionada: FuncaoTransacao) {
-    this.confirmationService.confirm({
-      message: `Tem certeza que deseja excluir a Função de Transação '${funcaoTransacaoSelecionada.name}'?`,
-      accept: () => {
-        this.analise.deleteFuncaoTransacao(funcaoTransacaoSelecionada);
-        this.salvarAnalise();
-        this.atualizaResumo();
-        this.pageNotificationService.addDeleteMsgWithName(funcaoTransacaoSelecionada.name);
-      }
-    });
-  }
+    selectRow(event) {
+        this.FuncaoTransacaoEditar = event.data.clone();
+    }
 
-  delete(funcaoTransacaoSelecionada: FuncaoTransacao) {
-    this.analise.deleteFuncaoTransacao(funcaoTransacaoSelecionada);
-    this.pageNotificationService.addDeleteMsgWithName(funcaoTransacaoSelecionada.name);
-  }
+    abrirEditar() {
+        this.isEdit = true;
+        this.prepararParaEdicao(this.FuncaoTransacaoEditar);
+    }
+    /*
+    *   Metodo responsavel por traduzir os tipos de impacto em função de dados 
+    */
+    traduzirImpactos() {
+        this.translate.stream(['Cadastros.FuncaoDados.Impactos.Inclusao', 'Cadastros.FuncaoDados.Impactos.Alteracao',
+            'Cadastros.FuncaoDados.Impactos.Exclusao', 'Cadastros.FuncaoDados.Impactos.Conversao',
+            'Cadastros.FuncaoDados.Impactos.Outros']).subscribe((traducao) => {
+                this.impacto = [
+                    { label: traducao['Cadastros.FuncaoDados.Impactos.Inclusao'], value: 'INCLUSAO' },
+                    { label: traducao['Cadastros.FuncaoDados.Impactos.Alteracao'], value: 'ALTERACAO' },
+                    { label: traducao['Cadastros.FuncaoDados.Impactos.Exclusao'], value: 'EXCLUSAO' },
+                    { label: traducao['Cadastros.FuncaoDados.Impactos.Conversao'], value: 'CONVERSAO' },
+                    { label: traducao['Cadastros.FuncaoDados.Impactos.Outros'], value: 'ITENS_NAO_MENSURAVEIS' }
+                ];
 
-  /**
-   *
-  **/
-  ngOnDestroy() {
-    this.changeDetectorRef.detach();
-    this.analiseCarregadaSubscription.unsubscribe();
-  }
+            })
+    }
 
-  /**
-   * Método responsável por preparar o popup novo.
-  **/
-  openDialogNovo() {
-    this.limparDadosDaTelaNaEdicaoCancelada();
-    this.showDialogNovo = true;
-  }
+    updateImpacto(impacto: string) {
+        switch (impacto) {
+            case 'INCLUSAO':
+                return this.getLabel('Cadastros.FuncaoTransacao.Inclusao');
+            case 'ALTERACAO':
+                return this.getLabel('Cadastros.FuncaoTransacao.Alteracao');
+            case 'EXCLUSAO':
+                return this.getLabel('Cadastros.FuncaoTransacao.Exclusao');
+            case 'CONVERSAO':
+                return this.getLabel('Cadastros.FuncaoTransacao.Conversao');
+            default: return this.getLabel('Global.Mensagens.Nenhum');
+        }
+    }
 
-  private inicializaFatoresAjuste(manual: Manual) {
-    const faS: FatorAjuste[] = _.cloneDeep(manual.fatoresAjuste);
-    this.fatoresAjuste =
-      faS.map(fa => {
-        const label = FatorAjusteLabelGenerator.generate(fa);
-        return { label: label, value: fa };
-      });
-    this.fatoresAjuste.unshift(this.fatorAjusteNenhumSelectItem);
-  }
+    private initClassificacoes() {
+        const classificacoes = Object.keys(TipoFuncaoTransacao).map(k => TipoFuncaoTransacao[k as any]);
+        // TODO pipe generico?
+        if (classificacoes) {
+            classificacoes.forEach(c => {
+                this.classificacoes.push({ label: c, value: c });
+            });
+        }
+    }
 
+    public buttonSaveEdit() {
+        if (this.isEdit) {
+            this.editar();
+        } else {
+            if (this.showMultiplos) {
+                let retorno = true;
+                for (const nome of this.parseResult.textos) {
+                    this.currentFuncaoTransacao.name = nome;
+                    if (!this.multiplos()) {
+                        retorno = false;
+                        break;
+                    }
+                }
+                if (retorno) {
+                    this.analise.funcaoTransacaos.concat(this.funcoesTransacaoList);
+                    this.salvarAnalise();
+                    this.subscribeToAnaliseCarregada();
+                    this.fecharDialog();
+                }
+            } else {
+                if (this.adicionar()) {
+                    this.fecharDialog();
+                }
+            }
+        }
+        if (this.blockUI.isActive) {
+            this.blockUI.stop();
+        }
+    }
+
+    multiplos(): boolean {
+        const retorno: boolean = this.verifyDataRequire();
+        if (!retorno) {
+            this.pageNotificationService.addErrorMsg(this.getLabel('Global.Mensagens.FavorPreencherCampoObrigatorio'));
+            return false;
+        } else {
+            this.desconverterChips();
+            this.verificarModulo();
+            const funcaoTransacaoCalculada = CalculadoraTransacao.calcular(this.analise.metodoContagem,
+                this.currentFuncaoTransacao,
+                this.analise.contrato.manual);
+            this.funcoesTransacaoList.push(funcaoTransacaoCalculada);
+            this.analise.addFuncaoTransacao(funcaoTransacaoCalculada);
+            this.atualizaResumo();
+            this.resetarEstadoPosSalvar();
+            return true;
+        }
+    }
+
+    disableTRDER() {
+        this.hideElementTDTR = this.analiseSharedDataService.analise.metodoContagem === 'INDICATIVA'
+            || this.analiseSharedDataService.analise.metodoContagem === 'ESTIMADA';
+    }
+
+    private subscribeToAnaliseCarregada() {
+        this.analiseCarregadaSubscription = this.analiseSharedDataService.getLoadSubject().subscribe(() => {
+            this.atualizaResumo();
+            //  this.loadDataFunctionsName();
+        });
+    }
+
+    private atualizaResumo() {
+        this.resumo = this.analise.resumoFuncaoTransacoes;
+        this.changeDetectorRef.detectChanges();
+    }
+
+    getTextDialog() {
+        this.textHeader = this.isEdit ? this.getLabel('Cadastros.FuncaoTransacao.Mensagens.msgAlterarFuncaoDeTransacao') : this.getLabel('Cadastros.FuncaoTransacao.Mensagens.msgAdicionarFuncaoDeTransacao');
+    }
+
+    get currentFuncaoTransacao(): FuncaoTransacao {
+        return this.analiseSharedDataService.currentFuncaoTransacao;
+    }
+
+    set currentFuncaoTransacao(currentFuncaoTransacao: FuncaoTransacao) {
+        this.analiseSharedDataService.currentFuncaoTransacao = currentFuncaoTransacao;
+    }
+
+    get funcoesTransacoes(): FuncaoTransacao[] {
+        if (!this.analise.funcaoTransacaos) {
+            return [];
+        }
+        return this.analise.funcaoTransacaos;
+    }
+
+    private get analise(): Analise {
+        return this.analiseSharedDataService.analise;
+    }
+
+    private get manual() {
+        if (this.analiseSharedDataService.analise.contrato &&
+            this.analiseSharedDataService.analise.contrato.manualContrato) {
+            return this.analiseSharedDataService.analise.contrato.manualContrato[0].manual;
+        }
+        return undefined;
+    }
+
+    isContratoSelected(): boolean {
+        const isContratoSelected = this.analiseSharedDataService.isContratoSelected();
+        if (isContratoSelected) {
+            if (this.fatoresAjuste.length === 0) {
+                this.inicializaFatoresAjuste(this.manual);
+            }
+        }
+        return isContratoSelected;
+    }
+
+    contratoSelecionado() {
+        if (this.currentFuncaoTransacao.fatorAjuste.tipoAjuste === 'UNITARIO') {
+            this.hideShowQuantidade = this.currentFuncaoTransacao.fatorAjuste === undefined;
+        } else {
+            this.currentFuncaoTransacao.quantidade = undefined;
+            this.hideShowQuantidade = true;
+            this.currentFuncaoTransacao.quantidade = undefined;
+        }
+    }
+
+    fatoresAjusteDropdownPlaceholder() {
+        if (this.isContratoSelected()) {
+            return this.getLabel('Cadastros.FuncaoTransacao.Mensagens.msgSelecioneUmDeflator');
+        } else {
+            return this.getLabel('Cadastros.FuncaoTransacao.Mensagens.msgSelecioneUmContratoNaAbaGeralParaCarregarOsDeflatores');
+        }
+    }
+
+    public carregarDadosBaseline() {
+        this.baselineService.baselineAnaliticoFT(this.analise.sistema.id).subscribe((res: ResponseWrapper) => {
+            this.dadosBaselineFT = res.json;
+        });
+
+    }
+
+    recuperarNomeSelecionado(baselineAnalitico: BaselineAnalitico) {
+
+        this.funcaoDadosService.getFuncaoTransacaoBaseline(baselineAnalitico.idfuncaodados)
+            .subscribe((res: FuncaoTransacao) => {
+                if (res.fatorAjuste === null) { res.fatorAjuste = undefined; }
+                res.id = undefined;
+                if (res.ders) {
+                    res.ders.forEach(ders => {
+                        ders.id = undefined;
+                    });
+                }
+                if (res.alrs) {
+                    res.alrs.forEach(alrs => {
+                        alrs.id = undefined;
+                    });
+                }
+                this.prepararParaEdicao(res);
+            });
+
+    }
+
+    searchBaseline(event): void {
+
+        let mdCache = this.moduloCache;
+        
+        this.baselineResultados = this.dadosBaselineFT.filter(function (fd) {
+            var teste: string = event.query;
+            return fd.name.toLowerCase().includes(teste.toLowerCase()) && fd.idfuncionalidade == mdCache.id;
+        });
+
+    }
+
+    // Funcionalidade Selecionada
+    functionalitySelected(funcionalidade: Funcionalidade) {
+        if (!funcionalidade) {
+        } else {
+            this.moduloCache = funcionalidade;
+        }
+        this.currentFuncaoTransacao.funcionalidade = funcionalidade;
+        this.carregarDadosBaseline();
+    }
+
+
+    adicionar(): boolean {
+        const retorno: boolean = this.verifyDataRequire();
+
+        if (!retorno) {
+            this.pageNotificationService.addErrorMsg(this.getLabel('Global.Mensagens.FavorPreencherCampoObrigatorio'));
+            return false;
+        } else {
+            if (this.currentFuncaoTransacao.fatorAjuste !== undefined) {
+                this.desconverterChips();
+                this.verificarModulo();
+                const funcaoTransacaoCalculada = CalculadoraTransacao.calcular(this.analise.metodoContagem,
+                    this.currentFuncaoTransacao,
+                    this.analise.contrato.manual);
+
+                this.validarFuncaoTransacaos(this.currentFuncaoTransacao).then(resolve => {
+                    if (resolve) {
+                        this.pageNotificationService.addCreateMsgWithName(funcaoTransacaoCalculada.name);
+                        this.analise.addFuncaoTransacao(funcaoTransacaoCalculada);
+                        this.atualizaResumo();
+                        this.resetarEstadoPosSalvar();
+                        this.salvarAnalise();
+                        this.estadoInicial();
+                    } else {
+                        this.pageNotificationService.addErrorMsg(this.getLabel('Cadastros.FuncaoTransacao.Mensagens.msgRegistroCadastrado'));
+                    }
+                });
+            }
+        }
+        return retorno;
+    }
+
+
+    validarFuncaoTransacaos(ft: FuncaoTransacao) {
+        const that = this;
+        return new Promise(resolve => {
+            if (that.analise.funcaoTransacaos) {
+                if (that.analise.funcaoTransacaos.length === 0) {
+                    return resolve(true);
+                }
+                that.analise.funcaoTransacaos.forEach((data, index) => {
+                    if (data.comprar(ft)) {
+                        return resolve(false);
+                    }
+                    if (!that.analise.funcaoTransacaos[index + 1]) {
+                        return resolve(true);
+                    }
+                });
+            }
+        });
+    }
+
+    private verifyDataRequire(): boolean {
+        let retorno = true;
+
+        if (this.currentFuncaoTransacao.name === undefined) {
+            this.nomeInvalido = true;
+            retorno = false;
+        } else {
+            this.nomeInvalido = false;
+        }
+
+        if (this.currentFuncaoTransacao.impacto === undefined) {
+            this.impactoInvalido = true;
+            retorno = false;
+        } else {
+            this.impactoInvalido = false;
+        }
+
+        if (this.currentFuncaoTransacao.impacto.indexOf('ITENS_NAO_MENSURAVEIS') === 0
+            && this.currentFuncaoTransacao.fatorAjuste === undefined) {
+            this.erroDeflator = true;
+            retorno = false;
+            this.pageNotificationService.addErrorMsg(this.getLabel('Cadastros.FuncaoTransacao.Mensagens.msgSelecioneUmDeflator'));
+        } else {
+            this.erroDeflator = false;
+        }
+
+        if (this.currentFuncaoTransacao.fatorAjuste === undefined){
+            this.deflatorVazio = true;
+            retorno = false;
+        }else{
+            this.deflatorVazio = false;
+        }
+
+        this.classInvalida = this.currentFuncaoTransacao.tipo === undefined;
+        if (this.currentFuncaoTransacao.fatorAjuste !== undefined) {
+            if (this.currentFuncaoTransacao.fatorAjuste.tipoAjuste === 'UNITARIO' &&
+                this.currentFuncaoTransacao.quantidade === undefined) {
+                this.erroUnitario = true;
+                retorno = false;
+            } else {
+                this.erroUnitario = false;
+            }
+        }
+
+        if (this.analiseSharedDataService.analise.metodoContagem === 'DETALHADA') {
+
+            if (this.alrsChips.length === 0) {
+                this.erroTR = true;
+                retorno = false;
+            } else {
+                this.erroTR = false;
+            }
+
+            if (this.dersChips.length === 0) {
+                this.erroTD = true;
+                retorno = false;
+            } else {
+                this.erroTD = false;
+            }
+        }
+
+        if (this.currentFuncaoTransacao.funcionalidade === undefined) {
+            this.pageNotificationService.addErrorMsg(this.getLabel('Cadastros.FuncaoTransacao.Mensagens.msgSelecioneUmModuloEFuncionalidade'));
+            retorno = false;
+        }
+
+        return retorno;
+    }
+
+    salvarAnalise() {
+        this.analiseService.atualizaAnalise(this.analise);
+    }
+
+    private desconverterChips() {
+        if (this.dersChips != null && this.alrsChips != null) {
+            this.currentFuncaoTransacao.ders = DerChipConverter.desconverterEmDers(this.dersChips);
+            this.currentFuncaoTransacao.alrs = DerChipConverter.desconverterEmAlrs(this.alrsChips);
+        }
+    }
+
+    dersReferenciados(ders: Der[]) {
+        const dersReferenciadosChips: DerChipItem[] = DerChipConverter.converterReferenciaveis(ders);
+        this.dersChips = this.dersChips.concat(dersReferenciadosChips);
+    }
+
+    private editar() {
+        const retorno: boolean = this.verifyDataRequire();
+        if (!retorno) {
+            this.pageNotificationService.addErrorMsg(this.getLabel('Global.Mensagens.FavorPreencherCampoObrigatorio'));
+            return;
+        } else {
+            this.desconverterChips();
+            this.verificarModulo();
+            const funcaoTransacaoCalculada = CalculadoraTransacao.calcular(
+                this.analise.metodoContagem, this.currentFuncaoTransacao, this.analise.contrato.manual);
+            this.validarFuncaoTransacaos(this.currentFuncaoTransacao).then(resolve => {
+                if(resolve) {
+                    this.analise.updateFuncaoTransacao(funcaoTransacaoCalculada);
+                    this.atualizaResumo();
+                    this.resetarEstadoPosSalvar();
+                    this.salvarAnalise();
+                    this.fecharDialog();
+                    this.pageNotificationService
+                        .addSuccessMsg(`${this.getLabel('Cadastros.FuncaoTransacao.Mensagens.msgFuncaoDeTransacao')}
+                        '${funcaoTransacaoCalculada.name}' ${this.getLabel('Cadastros.FuncaoTransacao.Mensagens.msgAlteradaComSucesso')}`);
+                    this.atualizaResumo();
+                    this.resetarEstadoPosSalvar();
+                } else {
+                    this.pageNotificationService.addErrorMsg(this.getLabel('Cadastros.FuncaoTransacao.Mensagens.msgRegistroCadastrado'));
+                }
+            });
+        }
+    }
+
+    fecharDialog() {
+        this.text = undefined;
+        this.limparMensagensErros();
+        this.showDialog = false;
+        this.analiseSharedDataService.funcaoAnaliseDescarregada();
+        this.currentFuncaoTransacao = new FuncaoTransacao();
+        this.dersChips = [];
+        this.alrsChips = [];
+        window.scrollTo(0, 60);
+    }
+
+    limparMensagensErros() {
+        this.nomeInvalido = false;
+        this.classInvalida = false;
+        this.impactoInvalido = false;
+        this.erroUnitario = false;
+        this.erroTR = false;
+        this.erroTD = false;
+        this.erroDeflator = false;
+    }
+
+    private resetarEstadoPosSalvar() {
+        this.currentFuncaoTransacao = this.currentFuncaoTransacao.clone();
+
+        this.currentFuncaoTransacao.artificialId = undefined;
+        this.currentFuncaoTransacao.id = undefined;
+
+        if (this.dersChips && this.alrsChips) {
+            this.dersChips.forEach(c => c.id = undefined);
+            this.alrsChips.forEach(c => c.id = undefined);
+        }
+
+    }
+
+    public verificarModulo() {
+        if (this.currentFuncaoTransacao.funcionalidade !== undefined) {
+            return;
+        }
+        this.currentFuncaoTransacao.funcionalidade = this.moduloCache;
+    }
+
+    classValida() {
+        this.classInvalida = false;
+    }
+
+    impactoValido() {
+        this.impactoInvalido = false;
+    }
+
+    datatableClick(event: DatatableClickEvent) {
+        if (!event.selection) {
+            return;
+        }
+
+        const funcaoTransacaoSelecionada: FuncaoTransacao = event.selection.clone();
+        switch (event.button) {
+            case 'edit':
+                this.isEdit = true;
+                this.prepararParaEdicao(funcaoTransacaoSelecionada);
+                break;
+            case 'delete':
+                this.confirmDelete(funcaoTransacaoSelecionada);
+                break;
+            case 'clone':
+                this.disableTRDER();
+                this.configurarDialog();
+                this.isEdit = false;
+                this.prepareToClone(funcaoTransacaoSelecionada);
+                this.currentFuncaoTransacao.id = undefined;
+                this.currentFuncaoTransacao.artificialId = undefined;
+                this.currentFuncaoTransacao.impacto = Impacto.ALTERACAO;
+                this.textHeader = this.getLabel('Cadastros.FuncaoTransacao.Mensagens.msgClonarFuncaoDeTransacao');
+        }
+    }
+
+    private prepararParaEdicao(funcaoTransacaoSelecionada: FuncaoTransacao) {
+
+        this.disableTRDER();
+        this.configurarDialog();
+
+
+        this.currentFuncaoTransacao = funcaoTransacaoSelecionada;
+
+        this.carregarValoresNaPaginaParaEdicao(funcaoTransacaoSelecionada);
+        this.pageNotificationService.addInfoMsg(`${this.getLabel('Cadastros.FuncaoTransacao.Mensagens.msgAlterandoFuncaoDeTransacao')} '${funcaoTransacaoSelecionada.name}'`);
+    }
+
+    private carregarDersAlrs() {
+        this.funcaoTransacaoService.getFuncaoTransacaosCompleta(this.currentFuncaoTransacao.id)
+            .subscribe(funcaoTransacao => {
+                this.currentFuncaoTransacao = funcaoTransacao;
+            });
+    }
+
+    // Prepara para clonar
+    private prepareToClone(funcaoTransacaoSelecionada: FuncaoTransacao) {
+        this.analiseSharedDataService.currentFuncaoTransacao = funcaoTransacaoSelecionada;
+        this.currentFuncaoTransacao.name = this.currentFuncaoTransacao.name + ' - Cópia';
+        this.carregarValoresNaPaginaParaEdicao(funcaoTransacaoSelecionada);
+        this.pageNotificationService.addInfoMsg(`${this.getLabel('Cadastros.FuncaoTransacao.Mensagens.msgClonandoFuncaoDeTransacao')} '${funcaoTransacaoSelecionada.name}'`);
+    }
+
+    private carregarValoresNaPaginaParaEdicao(funcaoTransacaoSelecionada: FuncaoTransacao) {
+        this.funcaoDadosService.mod.next(funcaoTransacaoSelecionada.funcionalidade);
+
+        this.analiseSharedDataService.funcaoAnaliseCarregada();
+        this.carregarDerEAlr(funcaoTransacaoSelecionada);
+        this.carregarFatorDeAjusteNaEdicao(funcaoTransacaoSelecionada);
+    }
+
+    private carregarFatorDeAjusteNaEdicao(funcaoSelecionada: FuncaoTransacao) {
+        this.inicializaFatoresAjuste(this.manual);
+        if (funcaoSelecionada.fatorAjuste !== undefined) {
+            funcaoSelecionada.fatorAjuste = _.find(this.fatoresAjuste, { value: { 'id': funcaoSelecionada.fatorAjuste.id } }).value;
+        }
+
+    }
+
+    private carregarDerEAlr(ft: FuncaoTransacao) {
+        this.dersChips = this.loadReference(ft.ders, ft.derValues);
+        this.alrsChips = this.loadReference(ft.alrs, ft.ftrValues);
+    }
+
+    moduloSelected(modulo: Modulo) {
+    }
+
+    // Carregar Referencial
+    private loadReference(referenciaveis: AnaliseReferenciavel[],
+        strValues: string[]): DerChipItem[] {
+
+        if (referenciaveis) {
+            if (referenciaveis.length > 0) {
+                return DerChipConverter.converterReferenciaveis(referenciaveis);
+            } else {
+                return DerChipConverter.converter(strValues);
+            }
+        } else {
+            return DerChipConverter.converter(strValues);
+        }
+    }
+
+    cancelar() {
+        this.showDialog = false;
+        this.fecharDialog();
+    }
+
+
+    confirmDelete(funcaoTransacaoSelecionada: FuncaoTransacao) {
+        this.confirmationService.confirm({
+            message: `${this.getLabel('Cadastros.FuncaoTransacao.Mensagens.msgTemCertezaQueDesejaExcluirFuncaoDeTransacao')} '${funcaoTransacaoSelecionada.name}'?`,
+            accept: () => {
+                this.analise.deleteFuncaoTransacao(funcaoTransacaoSelecionada);
+                this.salvarAnalise();
+                this.pageNotificationService.addDeleteMsgWithName(funcaoTransacaoSelecionada.name);
+            }
+        });
+    }
+
+    formataFatorAjuste(fatorAjuste: FatorAjuste): string {
+        return fatorAjuste ? FatorAjusteLabelGenerator.generate(fatorAjuste) : this.getLabel('Global.Mensagens.Nenhum');
+    }
+
+    ngOnDestroy() {
+        this.changeDetectorRef.detach();
+        this.analiseCarregadaSubscription.unsubscribe();
+    }
+
+    openDialog(param: boolean) {
+        this.isEdit = param;
+        this.disableTRDER();
+        this.configurarDialog();
+        if (this.currentFuncaoTransacao.fatorAjuste !== undefined) {
+            if (this.currentFuncaoTransacao.fatorAjuste.tipoAjuste === 'UNITARIO' && this.faS[0]) {
+                this.hideShowQuantidade = false;
+            } else {
+                this.hideShowQuantidade = true;
+            }
+        }
+    }
+
+    configurarDialog() {
+        this.getTextDialog();
+        this.windowHeightDialog = window.innerHeight * 0.60;
+        this.windowWidthDialog = window.innerWidth * 0.50;
+        this.showDialog = true;
+    }
+
+
+    private inicializaFatoresAjuste(manual: Manual) {
+        if (manual.fatoresAjuste) {
+            this.faS = _.cloneDeep(manual.fatoresAjuste);
+            
+            this.faS.sort((n1, n2) => {
+                if (n1.fator < n2.fator)
+                    return 1;
+                if (n1.fator > n2.fator)
+                    return -1;
+                return 0;
+            });
+
+            this.fatoresAjuste =
+                this.faS.map(fa => {
+                    const label = FatorAjusteLabelGenerator.generate(fa);
+                    return { label: label, value: fa };
+                });
+
+            this.fatoresAjuste.unshift(this.fatorAjusteNenhumSelectItem);
+        }
+    }
+
+    textChanged() {
+        this.valueChange.emit(this.text);
+        this.parseResult = DerTextParser.parse(this.text);
+    }
+
+    buttonMultiplos() {
+        this.showMultiplos = !this.showMultiplos;
+    }
+
+    limparDados() {
+        if (this.currentFuncaoTransacao.name == '') {
+            this.estadoInicial();
+        }
+    }
 }
+
+
+
+

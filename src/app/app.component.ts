@@ -8,6 +8,8 @@ import {
 } from '@angular/core';
 
 import { Message } from 'primeng/components/common/api';
+import { BlockUI, NgBlockUI } from 'ng-block-ui';
+import { TranslateService } from '@ngx-translate/core';
 
 enum MenuOrientation {
   STATIC,
@@ -24,6 +26,8 @@ declare var jQuery: any;
   styleUrls: ['./app.component.scss']
 })
 export class AppComponent implements AfterViewInit, OnDestroy {
+
+  @BlockUI() blockUI: NgBlockUI;
 
   layoutCompact: boolean = true;
 
@@ -67,7 +71,15 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 
   @ViewChild('layoutMenuScroller') layoutMenuScrollerViewChild: ElementRef;
 
-  constructor(public renderer: Renderer) { }
+  constructor(public renderer: Renderer, translate: TranslateService) {
+    translate.addLangs(['en', 'es', 'pt']);
+    translate.setDefaultLang('pt');
+
+    const browserLang = translate.getBrowserLang();
+    if (localStorage.getItem("language")) {
+      translate.use(localStorage.getItem("language"));
+    }
+  }
 
   ngAfterViewInit() {
     this.layoutContainer = <HTMLDivElement>this.layourContainerViewChild.nativeElement;

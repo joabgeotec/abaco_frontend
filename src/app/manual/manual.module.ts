@@ -5,6 +5,7 @@ import { RouterModule } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { DatatableModule } from '@basis/angular-components';
 import { MemoryDataTableModule } from '../memory-datatable/memory-datatable.module';
+import { BotoesExportacaoModule } from './../botoes-exportacao/botoes-exportacao.module';
 import {
   ButtonModule,
   InputTextModule,
@@ -16,8 +17,6 @@ import {
   DialogModule,
   ConfirmDialogModule,
   ConfirmationService,
-  InputTextareaModule,
-  SelectButtonModule,
   FileUploadModule
 } from 'primeng/primeng';
 
@@ -32,14 +31,14 @@ import {
 import { EsforcoFaseService } from '../esforco-fase/esforco-fase.service';
 import { ActiveBooleanPipe } from '../shared/active-boolean.pipe';
 import { AbacoButtonsModule } from '../abaco-buttons/abaco-buttons.module';
-import {HttpClientModule, HttpClient} from '@angular/common/http';
+import {HttpClient} from '@angular/common/http';
 import {TranslateModule, TranslateLoader} from '@ngx-translate/core';
 import {TranslateHttpLoader} from '@ngx-translate/http-loader';
-
 
 export function createTranslateLoader(http: HttpClient) {
   return new TranslateHttpLoader(http, './assets/i18n/', '.json');
 }
+
 @NgModule({
   imports: [
     CommonModule,
@@ -59,7 +58,8 @@ export function createTranslateLoader(http: HttpClient) {
     ConfirmDialogModule,
     MemoryDataTableModule,
     AbacoButtonsModule,
-    TranslateModule.forRoot({
+    BotoesExportacaoModule,
+    TranslateModule.forChild({
       loader: {
         provide: TranslateLoader,
         useFactory: (createTranslateLoader),

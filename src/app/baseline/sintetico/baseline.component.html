@@ -1,0 +1,40 @@
+<div class="ui-g ui-fluid">
+    <div class="ui-g-12 ui-md-12 ui-sm-12">
+        <div class="card card-w-title">
+
+            <h1 translate="Analise.Baseline.Baseline">Baseline</h1>
+            <div class="ui-g">
+                <div class="ui-g">
+                    <basis-datatable
+                            type="memory"
+                            (buttonClick)="datatableClick($event)"
+                            [rows]="20"
+                            [disableDelete]="true"
+                            [disableEdit]="true"
+                            [rowsPerPageOptions]="rowsPerPageOptions"
+                            [showPaginationFooter]="true"
+                            #memory>
+
+                        <basis-datatable-button
+                          name="geraBaselinePdfBrowser"
+                          tooltip="Relatório Baseline"
+                          icon="description"
+                          disabled="selecionada">
+                        </basis-datatable-button>
+
+                        <p-column [header]="this.getLabel('Analise.Baseline.Nome')" field="nome" [sortable]="true"></p-column>
+                        <p-column [header]="this.getLabel('Analise.Baseline.Sigla')" field="sigla" [sortable]="true"></p-column>
+                        <p-column [header]="this.getLabel('Analise.Baseline.NumeroOcorrencia')" field="numeroocorrencia" [sortable]="true"></p-column>
+                        <p-column [header]="this.getLabel('Analise.Baseline.PontosFuncao')" field="sum" [sortable]="true"></p-column>
+                        <p-column [header]="this.getLabel('Analise.Baseline.Equipe')" field="nomeEquipe" [sortable]="true"></p-column>
+                    </basis-datatable>
+
+                    <div class="ui-g-12 ui-md-2">
+                        <app-botoes-exportacao resourceName="baseline" fileName="baseline">
+                        </app-botoes-exportacao>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

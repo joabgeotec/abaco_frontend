@@ -3,21 +3,21 @@ import { FatorAjuste, ImpactoFatorAjuste } from '../fator-ajuste/index';
 import { Funcionalidade } from '../funcionalidade/index';
 import { Complexidade } from '../analise-shared/complexidade-enum';
 import { DerTextParser, ParseResult } from '../analise-shared/der-text/der-text-parser';
-import { FuncaoResumivel } from '../analise-shared/resumo-funcoes';
 import { FuncaoAnalise } from '../analise-shared/funcao-analise';
 import { Der } from '../der/der.model';
 import { DerChipConverter } from '../analise-shared/der-chips/der-chip-converter';
 import { Alr } from '../alr/alr.model';
+import { Impacto } from '../analise-shared/impacto-enum';
+import { FuncaoResumivel } from '../analise-shared';
 
 export enum TipoFuncaoTransacao {
-  'EE' = 'EE - Entrada Externa',
-  'SE' = 'SE - Saída Externa',
-  'CE' = 'CE - Consulta Externa',
-  'INM' = 'INM - Item Não Mensurável'
+  'EE' = 'EE',
+  'SE' = 'SE',
+  'CE' = 'CE',
+  'INM' = 'INM'
 }
 
-export class FuncaoTransacao implements BaseEntity, FuncaoResumivel,
-  FuncaoAnalise, JSONable<FuncaoTransacao> {
+export class FuncaoTransacao implements FuncaoResumivel, BaseEntity, FuncaoAnalise, JSONable<FuncaoTransacao> {
 
   detStr: string;
   ftrStr: string;
@@ -41,7 +41,7 @@ export class FuncaoTransacao implements BaseEntity, FuncaoResumivel,
     public derValues?: string[],
     public ftrValues?: string[],
     public ders?: Der[],
-    public impacto?: string,
+    public impacto?: Impacto,
     public quantidade?: number
   ) {
     if (!pf) {
@@ -50,6 +50,13 @@ export class FuncaoTransacao implements BaseEntity, FuncaoResumivel,
     if (!grossPF) {
       this.grossPF = 0;
     }
+  }
+
+  static convertTransacaoJsonToObject(json: any) {
+    const sintetico = Object.create(FuncaoTransacao.prototype);
+    return Object.assign(sintetico, json, {
+        created: new Date(json.created)
+    });
   }
 
   static tipos(): string[] {
@@ -65,10 +72,16 @@ export class FuncaoTransacao implements BaseEntity, FuncaoResumivel,
 
     copy.funcionalidade = Funcionalidade.toNonCircularJson(copy.funcionalidade);
 
-    copy.ders = this.ders.map(der => der.toJSONState());
-    copy.alrs = this.alrs.map(alr => alr.toJSONState());
+    if (this.der) { copy.ders = this.ders.map(der => der.toJSONState()); }
+    if (this.alrs) { copy.alrs = this.alrs.map(alr => alr.toJSONState()); }
 
     return copy;
+  }
+
+  comprar(funcaoTransacao: FuncaoTransacao): boolean {
+    return funcaoTransacao.name === this.name &&
+    funcaoTransacao.funcionalidade.id === this.funcionalidade.id &&
+    funcaoTransacao.funcionalidade.modulo.id === this.funcionalidade.modulo.id;
   }
 
   copyFromJSON(json: any): FuncaoTransacao {
@@ -104,6 +117,7 @@ export class FuncaoTransacao implements BaseEntity, FuncaoResumivel,
       this.name, this.sustantation, this.der, this.ftr, this.grossPF,
       this.derValues, this.ftrValues, this.ders, this.impacto, this.quantidade);
   }
+
 }
 
 // TODO bem duplicado com FuncaoDados

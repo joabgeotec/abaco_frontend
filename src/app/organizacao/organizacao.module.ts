@@ -5,6 +5,13 @@ import { RouterModule } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { DatatableModule } from '@basis/angular-components';
 import { MemoryDataTableModule } from '../memory-datatable/memory-datatable.module';
+import { BotoesExportacaoModule } from './../botoes-exportacao/botoes-exportacao.module';
+import { NgxMaskModule } from 'ngx-mask';
+import { UtilModule } from '../util/util.module';
+import { TableModule } from 'primeng/table';
+import { PanelModule } from 'primeng/panel';
+import { FieldsetModule } from 'primeng/fieldset';
+
 import {
   ButtonModule,
   InputTextModule,
@@ -31,6 +38,14 @@ import {
 import { AbacoButtonsModule } from '../abaco-buttons/abaco-buttons.module';
 import { TextMaskModule } from 'angular2-text-mask';
 
+import { HttpClient } from '@angular/common/http';
+import { TranslateModule, TranslateLoader } from '@ngx-translate/core';
+import { TranslateHttpLoader } from '@ngx-translate/http-loader';
+
+export function createTranslateLoader(http: HttpClient) {
+  return new TranslateHttpLoader(http, './assets/i18n/', '.json');
+}
+
 @NgModule({
   imports: [
     CommonModule,
@@ -50,8 +65,21 @@ import { TextMaskModule } from 'angular2-text-mask';
     MemoryDataTableModule,
     CheckboxModule,
     FileUploadModule,
+    NgxMaskModule.forRoot(),
     AbacoButtonsModule,
-    TextMaskModule
+    TextMaskModule,
+    BotoesExportacaoModule,
+    UtilModule,
+    PanelModule,
+    TableModule,
+    FieldsetModule,
+    TranslateModule.forChild({
+      loader: {
+        provide: TranslateLoader,
+        useFactory: (createTranslateLoader),
+        deps: [HttpClient]
+      }
+    })
   ],
   declarations: [
     OrganizacaoComponent,
@@ -64,4 +92,6 @@ import { TextMaskModule } from 'angular2-text-mask';
   ],
   schemas: [CUSTOM_ELEMENTS_SCHEMA]
 })
-export class AbacoOrganizacaoModule {}
+
+
+export class AbacoOrganizacaoModule { }
